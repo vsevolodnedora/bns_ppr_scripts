@@ -1,16 +1,12 @@
 from __future__ import division
-#
-#
-# Contains common methods regarding properties of simulations
-#
-#
+from sys import path
+path.append('modules/')
+
 from scipy import interpolate
 import numpy as np
 import csv
 import os
 
-from sys import path
-path.append('modules/')
 from utils import get_retarded_time
 import units as ut
 from general import *
@@ -60,7 +56,6 @@ def fill_self_parameters():
         run["M1"] = m1
         run["M2"] = m2
         run["EOS"] = eos
-
 
 # Parfile
 
@@ -212,7 +207,6 @@ def fill_from_lorene(dics_lorene, replace_value=False):
 
                 fill_table_value(run, 'comment', '{}'.format(lorene_run_fold), replace_value)
 
-
 # TOVs
 
 def fill_from_TOVs():
@@ -287,7 +281,6 @@ def fill_from_TOVs():
             tmp2 = (mg2 + (12 * mg1)) * (mg2 ** 4) * lam2
             run["Lambda"] = (16. / 13.) * (tmp1 + tmp2) / (mg_tot ** 5.)
 
-
 # GW
 
 def fill_fpeak():
@@ -303,7 +296,6 @@ def fill_fpeak():
         except:
             print('Failed *fpeak* extraction for run:{}'.format(run["name"]))
             run['fpeak'] = "nan"
-
 
 def fill_tmerg():
     dic_tmergs = []
@@ -331,7 +323,6 @@ def fill_tmerg():
         dic_tmergs.append(dic_tmerg)
 
     return dic_tmergs
-
 
 def fill_jgw_egw(tmrgr_dic):
     for run, tmrgrs in zip(table, tmrgr_dic):
@@ -362,7 +353,6 @@ def fill_jgw_egw(tmrgr_dic):
             Printcolor.yellow("Warning: No /waveforms/EJ.dat found")
             run['EGW'] = 'nan'
             run['JGW'] = 'nan'
-
 
 # Ejecta & Disk
 

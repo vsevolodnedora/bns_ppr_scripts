@@ -10,7 +10,7 @@ class Paths:
     skynet =    '/data01/numrel/vsevolod.nedora/Data/skynet/'
     mkn_scripts='/data01/numrel/vsevolod.nedora/macrokilonova_bayes/'
     output =    '/data01/numrel/vsevolod.nedora/output/'
-    figs =      '/data01/numrel/vsevolod.nedora/figs/'
+    plots =     '/data01/numrel/vsevolod.nedora/figs/'
 
 class Lists:
 
@@ -67,3 +67,21 @@ class Files:
     it_time = 'collated/rho.maximum.asc'
     models = 'models.csv'
     models_empty = 'models_tmp2.csv'
+
+    # collated2
+    disk_mass = 'disk_mass.asc'
+
+    # collated
+    dens_unb = 'dens_unbnd.norm1.asc'
+    dens_unb_bern = 'dens_unbnd_bernoulli.norm1.asc'
+    dens = 'dens.norm1.asc'
+
+    # ejecta
+    total_flux  = 'total_flux.dat'
+    hist_theta  = 'hist_theta.dat'
+    hist_ye     = 'hist_ye.dat'
+    hist_entropy= 'hist_entropy.dat'
+    hist_vel_inf= 'hist_vel_inf.dat'
+
+    # nucle
+    yields      = 'yields.h5'

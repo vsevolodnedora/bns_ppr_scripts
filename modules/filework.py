@@ -18,3 +18,7 @@ class MakePath:
     @staticmethod
     def collated2(sim):
         return Paths.ppr_sims + sim + '/' + 'collated2' + '/'
+
+    @staticmethod
+    def waveforms(sim):
+        return Paths.ppr_sims + sim + '/' + 'waveforms' + '/'

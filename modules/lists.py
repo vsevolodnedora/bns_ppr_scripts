@@ -8,9 +8,10 @@ class Paths:
     TOVs =      '/data01/numrel/vsevolod.nedora/Data/TOVs/'
     gw170817 =  '/data1/numrel/WhiskyTHC/Backup/2018/GW170817/'
     skynet =    '/data01/numrel/vsevolod.nedora/Data/skynet/'
-    mkn_scripts='/data01/numrel/vsevolod.nedora/macrokilonova_bayes/'
     output =    '/data01/numrel/vsevolod.nedora/output/'
     plots =     '/data01/numrel/vsevolod.nedora/figs/'
+    mkn =       '/data01/numrel/vsevolod.nedora/macrokilonova_bayes/mk_source/source/'
+    home =      '/data01/numrel/vsevolod.nedora/bns_ppr_scripts/'
 
 class Lists:
 
@@ -64,17 +65,17 @@ class Lists:
 ]
 
 class Files:
-    it_time = 'collated/rho.maximum.asc'
-    models = 'models.csv'
-    models_empty = 'models_tmp2.csv'
+    it_time     = 'collated/rho.maximum.asc'
+    models      = 'models.csv'
+    models_empty= 'models_tmp2.csv'
 
     # collated2
-    disk_mass = 'disk_mass.asc'
+    disk_mass   = 'disk_mass.asc'
 
     # collated
-    dens_unb = 'dens_unbnd.norm1.asc'
+    dens_unb    = 'dens_unbnd.norm1.asc'
     dens_unb_bern = 'dens_unbnd_bernoulli.norm1.asc'
-    dens = 'dens.norm1.asc'
+    dens        = 'dens.norm1.asc'
 
     # ejecta
     total_flux  = 'total_flux.dat'
@@ -85,3 +86,15 @@ class Files:
 
     # nucle
     yields      = 'yields.h5'
+    solar_r     = 'solar_r.dat'
+
+    # waveforms
+    l2_m2       = 'waveform_l2_m2.dat'
+    tmerg       = 'tmerger.dat'
+
+    # ejecta profile:
+    ejecta_profile="ejecta_profile.dat"
+
+    # mkn
+    mkn_model   = 'mkn_model.h5'
+    filt_at2017gfo= 'AT2017gfo.h5'

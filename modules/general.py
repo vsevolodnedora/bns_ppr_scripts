@@ -154,3 +154,10 @@ class FromName:
             if res in self.sim.split("_"):
                 return res
         else: raise NameError("Unrecognized resolution in sim {}".format(self.sim))
+
+
+def clrs(arr):
+    colors = []
+    for i in range(len(arr)):
+        colors.append('C'+str(i))
+    return colors

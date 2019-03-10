@@ -356,9 +356,26 @@ def fill_jgw_egw(tmrgr_dic):
 
 # Ejecta & Disk
 
-def fill_ejecta_disk_times(tmrgr_dics, det=1):
-    from ejecta_disk import SIM_EJECTA
-    from ejecta_disk import SIM_DISK_UNBOUND
+def fill_ej_times(tmrgr_dics, extension='_0'):
+    from outflowed import SIM_EJ_HIST
+
+    for run, tmrgr_dic in zip(table, tmrgr_dics):
+
+        try:
+            ej = SIM_EJ_HIST(run["name"], extension, True) # geodesic, at det.0 by default
+            run['Mej']      = ej.get_par('Mej_tot')
+            run["dMej"]     = ej.get_par('dMej_tot')
+            run['ThetaRMS'] = ej.get_par('theta_rms')
+            run['Yeej']     = ej.get_par('Ye')
+            run['Sej']      = ej.get_par('s')
+            run['vej']      = ej.get_par('vel_inf')
+            run['Ekej']     = ej.get_par('E_kin')
+            run['tend']     = ej.time_total_flux[-1]
+        except IOError:
+            Printcolor.yellow("Warning: Ej IOError for {}".format(run["name"]))
+
+def fill_unb_disk_times(tmrgr_dics):
+    from outflowed import SIM_UNBOUND, SIM_DISK
 
     for run, tmrgr_dic in zip(table, tmrgr_dics):
 
@@ -366,29 +383,19 @@ def fill_ejecta_disk_times(tmrgr_dics, det=1):
         run['tmerg_r'] = tmrgr_r
 
         try:
-            ej = SIM_EJECTA(run["name"], criteria='geo', det=det)
-            run['Mej'] = ej.get_par('Mej_tot')
-            run["dMej"] = ej.get_par('dMej_tot')
-            run['ThetaRMS'] = ej.get_par('theta_rms')
-            run['Yeej'] = ej.get_par('Ye')
-            run['Sej'] = ej.get_par('s')
-            run['vej'] = ej.get_par('vel_inf')
-            run['Ekej'] = ej.get_par('E_kin')
-            run['tend'] = ej.time_total_flux[-1]
-        except:
-            COLOREDTEXT.print_red('Failed to extract EJECTA')
-            # print('Failed to extract EJECTA')
+            unb = SIM_UNBOUND(run["name"])
+            run['Munb']     = unb.get_par('Munb_tot')
+            run['Munb_bern']= unb.get_par('Munb_bern_tot')
+            run['tcoll']    = unb.get_par('tcoll') - tmrgr_r
+            run['Mdisk']    = unb.get_par('Mdisk')
+        except IOError:
+            Printcolor.yellow("Warning: Unbound not IOError for {}".format(run["name"]))
+
         try:
-            disk = SIM_DISK_UNBOUND(run["name"])
-            run['tcoll'] = disk.get_par('tcoll') - tmrgr_r
-            run['Mdisk'] = disk.get_par('Mdisk')
+            disk = SIM_DISK(run["name"])
             run['Mdisk3D'] = disk.get_par('Mdisk_last')
-            run['Munb'] = disk.get_par('Munb_tot')
-            run['Munb_bern'] = disk.get_par('Munb_bern_tot')
-        except:
-
-            COLOREDTEXT.print_red('Failed to extract DISK_UNBOUND')
-
+        except IOError:
+            Printcolor.yellow("Warning: Disk evol. IOError for {}".format(run["name"]))
 
 if __name__ == '__main__':
     '''-------------------------------| FILLING DATA FROM SELF NAME |------------------------------'''
@@ -442,6 +449,8 @@ if __name__ == '__main__':
 
     # load_table('models.csv')
 
-    # fill_ejecta_disk_times(dic_tmergs, det=1)
+    fill_unb_disk_times(dic_tmergs)
+    fill_ej_times(dic_tmergs, extension='_0') # geodesic
+
 
     save_table(Paths.output + Files.models)

@@ -42,15 +42,12 @@ from units import time_constant, volume_constant, energy_constant
 
 class SIM_NUCLEO:
 
-    def __init__(self, sim, extension='_0', det=0):
+    def __init__(self, sim, extension='_0'):
 
         self.sim = sim
-        self.det = det
 
         self.outflowdir = MakePath.outflow(sim, extension)
-        self.path = MakePath.outflow(sim, extension)
-
-        self.path = self.path_to_outflow_dir + 'yields.h5'
+        self.path = self.outflowdir + 'yields.h5'
 
     # @staticmethod
     # def normalize_yields(As, Ys):
@@ -160,8 +157,84 @@ class SIM_NUCLEO:
 
     def solar(self):
 
-        Asun, Ysun = np.loadtxt(Paths., unpack=True)
+        Asun, Ysun = np.loadtxt(Paths.skynet + Files.solar_r, unpack=True)
         Asun, Ysun = self.sum_for_all_charge_z(Asun, Ysun)
         Ysun /= np.sum(Ysun)
 
         return Asun, Ysun
+
+class PLOT_NUCLEO:
+
+    def __init__(self):
+
+        # self.task_dic = {'sims':     ['DD2_M13641364_M0_SR']#, 'DD2_M13641364_M0_SR'],  #   corr_vn1
+        #                  'criteria': ['geo']#, 'bern wind'],                  # /_b_w/corr_vn1_vn2
+        #                  'det':      [0]#, 0],                                # /outflowed_0_b_w/corr_vn1_vn2
+        #                  'norm':     ['195']#, 'sum'],
+        #                  'labels':   ['']#, ''],
+        #                  'colors':   ['blue']#, 'red'],
+        #                  'yscale': 'log',
+        #                  }
+
+        self.task_dic = {'sims':     ['DD2_M13641364_M0_SR', 'SLy4_M13641364_M0_SR', 'LS220_M13641364_M0_SR', 'SFHo_M13641364_M0_SR'],#, 'DD2_M13641364_M0_SR'],  #   corr_vn1
+                         'extension': ['_0', '_0', '_0', '_0'],#, 'bern wind'],                  # /_b_w/corr_vn1_vn2                              # /outflowed_0_b_w/corr_vn1_vn2
+                         'norm':     ['195', '195', '195', '195'],#, 'sum'],
+                         'labels':   ['DD2', 'SLy4', "LS220", 'SFHo'],#, ''],
+                         'colors':   ['blue', 'green', 'orange', 'red'],#, 'red'],
+                         'yscale': 'log',
+                         }
+        self.fig_name = 'yields'
+        self.plot_solar = True
+
+    def plot_from_dic(self):
+
+        n_rows = 1
+        n_cols = 1
+
+        fig = plt.figure(figsize=(6.5, 3.6))  # figsize=(4.5, 2.5 * 3.6)  # (<->; v)
+
+        axs = []
+        for n in range(1, n_rows + 1):
+            if n == 1:
+                axs.append(fig.add_subplot(n_rows, n_cols, n))
+            else:
+                axs.append(fig.add_subplot(n_rows, n_cols, n, sharex=axs[n - 2]))  # sharex=axs[n - 2]))
+
+        for i_sim, sim in enumerate(self.task_dic['sims']):
+
+            cl_nuc = SIM_NUCLEO(sim, self.task_dic['extension'][i_sim])
+
+            if self.plot_solar:
+                a_sol, y_sol = cl_nuc.solar()
+                axs[0].plot(a_sol, y_sol, '.', color='black')
+
+            a_arr, ye_final = cl_nuc.load_from_outflow(self.task_dic['norm'][i_sim])
+            axs[0].step(a_arr, ye_final, label=self.task_dic['labels'][i_sim], color=self.task_dic['colors'][i_sim])
+
+            axs[0].legend(loc='best', numpoints=1)
+            if self.task_dic['yscale'] == 'log':
+                axs[0].set_yscale("log")
+            axs[0].tick_params(labelsize=12)
+            axs[0].set_ylabel("Relative final abundances", fontsize=12)
+
+
+        plt.ylim(ymin=1e-5, ymax=2e-1)
+        plt.xlim(xmin=50, xmax=210)
+        # plt.ylabel("Relative final abundances")
+        plt.xlabel("A", fontsize=12)
+        # plt.yscale("log")
+        plt.tick_params(axis='both', which='both', labelleft=True, labelright=False, tick1On=True, tick2On=True,
+                        labelsize=12, direction='in')  # labeltop
+        # plt.xticks(fontsize=12)
+        # plt.yticks(fontsize=12)
+
+        plt.minorticks_on()
+        plt.savefig('{}{}.png'.format(Paths.plots, self.fig_name), bbox_inches='tight') # , dpi=128
+        plt.close()
+
+if __name__ == '__main__':
+
+    ''' PLOT YIELDS '''
+    pl_cl = PLOT_NUCLEO()
+    pl_cl.plot_from_dic()
+    exit(1)

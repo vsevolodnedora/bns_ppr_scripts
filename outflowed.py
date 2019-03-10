@@ -68,6 +68,13 @@ class SIM_DISK:
                 raise ValueError('Error in removing nans from disk')
         return t_disk_evol, m_disk_evol # time in [s]
 
+    def get_par(self, v_n):
+        if v_n == 'Mdisk_last':
+            if any(self.disk_mass):
+                return self.disk_mass[-1]
+            else:
+                return np.nan
+
 class SIM_UNBOUND:
 
     def __init__(self, sim):
@@ -257,7 +264,7 @@ class SIM_EJ_HIST:
 
         Mej = self.mass_total_flux[-1]
         # Ye, M = np.loadtxt(self.outflow_path + Files.hist_ye, usecols=(0, 1), unpack=True)
-        Ye_avg = np.sum(self.Ye * self.ye_M) / Mej
+        Ye_avg = np.sum(self.ye * self.ye_M) / Mej
 
         return Ye_avg
 
@@ -333,7 +340,7 @@ class SIM_EJ_HIST:
         elif v_n == 'vel_inf':
             return self.get_average_vel_at_infinity()
 
-        elif v_n == 'theta_75':
+        elif v_n == 'theta_rms':
             return self.theta_rms
 
         elif v_n == 'E_kin':

@@ -59,16 +59,17 @@ class COMPUTE_LIGHTCURVE():
         #     self.path_to_outflow_dir = LISTS.loc_of_sims + sim + '/outflow_{}_b_w/'.format(det)
         # else:
         #     raise NameError("Criteria '{}' is not recongnized".format(criteria))
+        self.sim = sim
         self.path_to_outflow_dir = MakePath.outflow(sim, '_0')
         self.path_to_outflow_dir_psdyn = MakePath.outflow(sim, '_0_b_w')
         dyn_ejecta_profile_fpath = self.path_to_outflow_dir + Files.ejecta_profile
-        psdyn_ejecta_profile_fpath=self.path_to_outflow_dir_psdyn + Files.ejecta_profile
+        psdyn_ejecta_profile_fpath=self.path_to_outflow_dir_psdyn + Files.ejecta_profile_bern
 
 
         set_dyn_iso_aniso       = "aniso"
         set_psdyn_iso_aniso     = "aniso"
-        set_wind_iso_aniso      = ""
-        set_secular_iso_aniso   = "aniso"
+        set_wind_iso_aniso      = "aniso"
+        set_secular_iso_aniso   = ""
 
         self.glob_params    = {}
         self.glob_vars      = {}
@@ -223,7 +224,7 @@ class COMPUTE_LIGHTCURVE():
         elif iso_or_aniso == 'aniso':
             self.ejecta_params['wind'] = {'mass_dist':'step', 'vel_dist':'uniform', 'op_dist':'step',
                          'therm_model':'BKWM','eps_ye_dep':True,'v_law':'power'}
-            self.ejecta_vars['wind'] = {'xi_disk':         0.05,
+            self.ejecta_vars['wind'] = {'xi_disk':         0.02,
                          'm_ej':            None,
                          'step_angle_mass': math.radians(60.),
                          'high_lat_flag':   True,
@@ -260,7 +261,7 @@ class COMPUTE_LIGHTCURVE():
         elif iso_or_aniso == 'aniso':
             self.ejecta_params['secular'] = {'mass_dist':'sin2', 'vel_dist':'uniform', 'op_dist':'uniform',
                             'therm_model':'BKWM','eps_ye_dep':True,'v_law':'power'}
-            self.ejecta_vars['secular'] = {'xi_disk':          0.2,
+            self.ejecta_vars['secular'] = {'xi_disk':          0.1,
                             'm_ej':             None,
                             'step_angle_mass':  None,
                             'high_lat_flag':    None,
@@ -503,6 +504,122 @@ class COMPUTE_LIGHTCURVE():
         print('\\end{table}')
 
 
+    def load_ej_profile_for_mkn(self, fpath):
+        th, mass, vel, ye = np.loadtxt(fpath,
+                                       unpack=True, usecols=(0, 1, 2, 3))
+        return th, mass, vel, ye
+    # tech func to check how the smoothing actually done
+    def smooth_profile(self, mass):
+
+        lmass = np.log10(mass)
+
+        mass_smooth = []
+        for i in range(len(mass)):
+            if (i == 0):
+                mass_smooth.append(10. ** ((lmass[0])))
+            elif (i == 1):
+                mass_smooth.append(10. ** ((lmass[i - 1] + lmass[i] + lmass[i + 1]) / 3.))
+            elif (i == 2):
+                mass_smooth.append(10. ** ((lmass[i - 2] + lmass[i - 1] + lmass[i] + lmass[i + 1] + lmass[i + 2]) / 5.))
+            elif (i == len(mass) - 3):
+                mass_smooth.append(10. ** ((lmass[i - 2] + lmass[i - 1] + lmass[i] + lmass[i + 1] + lmass[i + 2]) / 5.))
+            elif (i == len(mass) - 2):
+                mass_smooth.append(10. ** ((lmass[i - 1] + lmass[i] + lmass[i + 1]) / 3.))
+            elif (i == len(mass) - 1):
+                mass_smooth.append(10. ** ((lmass[i])))
+            else:
+                mass_smooth.append(10. ** ((lmass[i - 3] + lmass[i - 2] + lmass[i - 1] + lmass[i] + lmass[i + 1] +
+                                            lmass[i + 2] + lmass[i + 3]) / 7.))
+        mass_smooth = np.asarray(mass_smooth)
+        # tmp1 = np.sum(mass)
+        # tmp2 = np.sum(mass_smooth)
+        # mass_smooth = tmp1 / tmp2 * mass_smooth
+
+        return mass_smooth
+    def plot_test_smooth_profile(self, extension):
+
+        fpath = MakePath.outflow(self.sim, extension) + Files.ejecta_profile
+
+        # loading original profiles
+        th, mass, vel, ye = self.load_ej_profile_for_mkn(fpath)
+
+        th *= 180 / np.pi
+        # th -= 90
+
+        # HAVE NO IDEA WHI THIS EXISTS
+        for i in range(len(th)):
+            if (mass[i] < 1.e-9):
+                mass[i] = 1.e-9
+                vel[i] = 0.1
+                ye[i] = 0.1
+
+
+        # smoothing data
+        mass_smooth = self.smooth_profile(mass)
+        tmp1 = np.sum(mass)
+        tmp2 = np.sum(mass_smooth)
+        mass_smooth = tmp1 / tmp2 * mass_smooth
+
+        ye_smooth = self.smooth_profile(ye)
+        tmp1 = np.sum(ye * mass)
+        tmp2 = np.sum(ye_smooth * mass)
+        # print(ye_smooth)
+        ye_smooth = tmp1 / tmp2 * ye_smooth
+
+        vel_smooth = self.smooth_profile(vel)
+        tmp1 = np.sum(vel * mass)
+        tmp2 = np.sum(vel_smooth)
+        vel_smooth = (tmp1 / tmp2 * vel_smooth) / mass_smooth
+
+        # central angle (plane of orbit)
+        # th_central = []
+        # for a in ang_dist:
+        #     th_central.append(0.5 * (a[1] + a[0]))
+
+        # cropping everything for just above orbital plane (0-> 90)
+        idx = find_nearest_index(th, 90)
+        th = th[idx:] - 90 # offsetting to orbital plane
+        mass = mass[idx:]
+        mass_smooth = mass_smooth[idx:]
+
+        ye = ye[idx:]
+        ye_smooth = ye_smooth[idx:]
+
+        vel = vel[idx:]
+        vel_smooth = vel_smooth[idx:]
+
+        # Plot Results of the smoothing for comparison
+        f, (ax1, ax2, ax3) = plt.subplots(3, sharex=True) # sharey=True
+
+        ax1.plot(th, mass, '-.', color='gray')
+        ax1.plot(th, mass_smooth, '-', color='black', label='smoothed')
+        ax1.set_ylabel('mass')
+        ax1.tick_params(labelsize=12)
+        ax1.legend(loc='best', numpoints=1)
+
+        ax2.plot(th, ye, '-.', color='gray')
+        ax2.plot(th, ye_smooth, '-', color='black', label='smoothed')
+        ax2.set_ylabel('ye')
+        ax2.tick_params(labelsize=12)
+        ax2.legend(loc='best', numpoints=1)
+
+        ax3.plot(th, vel, '-.', color='gray')
+        ax3.plot(th, vel_smooth, '-', color='black', label='smoothed')
+        ax3.set_ylabel('vel')
+        ax3.tick_params(labelsize=12)
+        ax3.legend(loc='best', numpoints=1)
+
+        f.subplots_adjust(hspace=0)
+
+        plt.setp([a.get_xticklabels() for a in f.axes[:-1]], visible=False)
+        plt.xlabel('theta')
+        plt.tick_params(axis='both', which='both', labelleft=True, labelright=False, tick1On=True, tick2On=True,
+                        labelsize=12)  # labeltop
+
+        plt.minorticks_on()
+        plt.savefig(Paths.plots+'smoothed_profs.png', bbox_inches='tight', dpi=128)
+        plt.close()
+
 class PLOT_LIGHTCURVE():
 
     def __init__(self, sim, extension):
@@ -620,19 +737,29 @@ class PLOT_LIGHTCURVE():
         def plot_for_one_band(ax, band, color):
 
             mins, maxs = self.get_min_max_for_all_band(dict_model, band)
-            plt.fill_between(dict_model['time'], maxs, mins, alpha=.5, color=color, label=band)
+            plt.fill_between(dict_model['time'], maxs, mins, alpha=.5, color=color)
 
+            labeled_bands = []
             for filter in dict_model.keys():
                 # print("filter:{} ")
                 if filter.split('_')[0] == band and filter in dict_obs_filters.keys():
-                    ax.errorbar(dict_obs_filters[filter][:, 0], dict_obs_filters[filter][:, 1],
-                                 yerr=dict_obs_filters[filter][:, 2],
-                                 fmt='o', color=color)
+                    if not band in labeled_bands:
+                        ax.errorbar(dict_obs_filters[filter][:, 0], dict_obs_filters[filter][:, 1],
+                                    yerr=dict_obs_filters[filter][:, 2],
+                                    fmt='o', color=color, label=band)
+                    else:
+                        ax.errorbar(dict_obs_filters[filter][:, 0], dict_obs_filters[filter][:, 1],
+                                    yerr=dict_obs_filters[filter][:, 2],
+                                    fmt='o', color=color)
+                    labeled_bands.append(band)
 
-        plt.figure()
+
+        plt.figure(figsize=(4.5, 3.6))
         ax = plt.subplot(111)
 
-        for band, color in zip(bands, clrs(bands)):
+        for band in bands:
+            # print('band')
+            color = color_for_mkn_band(band)
             plot_for_one_band(ax, band, color)
 
         plt.minorticks_on()
@@ -643,11 +770,12 @@ class PLOT_LIGHTCURVE():
                         tick1On=True, tick2On=True, labelsize=12, direction='in')  # labeltop
         plt.gca().invert_yaxis()
         plt.xscale("log")
+        plt.xlim(xmin=0.2)
         plt.ylim(ymin=25)#, ymax=2e-1)
         # plt.xlim(xmin=50, xmax=210)
         plt.ylabel(r"AB magnitude at 40 Mpc", fontsize=12)
         plt.xlabel(r"time [days]", fontsize=12)
-        plt.legend(loc='best', numpoints=1)
+        plt.legend(loc='best', numpoints=1, fontsize=12)
 
         plt.savefig('{}{}.png'.format(Paths.plots, fname), bbox_inches='tight', dpi=128)
         plt.close()
@@ -1987,11 +2115,13 @@ class BEST_SIM_KILONOVA(SIM_KILONOVA):
 
 if __name__ == '__main__':
 
+
     make_model = COMPUTE_LIGHTCURVE("DD2_M13641364_M0_SR")
     make_model.compute_save_lightcurve(write_output=True)
+    # make_model.plot_test_smooth_profile('_0')
 
     plot_model = PLOT_LIGHTCURVE("DD2_M13641364_M0_SR", '_0')
-    plot_model.plot_for_several_bands(['g', 'z'], "tst_mkn")
+    plot_model.plot_for_several_bands(['g', 'r', 'z'], "tst_mkn")
 
 # if __name__ == '__main__':
 #

@@ -38,6 +38,7 @@ from general import *
 from lists import *
 from filework import *
 from units import time_constant, volume_constant, energy_constant
+from gw import SIM_GW
 
 class SIM_DISK:
 
@@ -166,7 +167,7 @@ class SIM_EJ_HIST:
         self.sim = sim
         self.outflow_path = MakePath.outflow(sim, extension)
 
-        start_t = time.time()
+        # start_t = time.time()
         # print("\t Loading Ejecta files [{}]...".format(sim))
 
 
@@ -214,6 +215,7 @@ class SIM_EJ_HIST:
         #     self.theta_rms = self.load_theta_rms()
 
         # standard histograms from outflowed.cc
+        norm = False
         hist_v_ns = ['ye', 'temp', 'rho', 'vel', 'vel_inf', 'theta', 'entropy']
         self.ye, self.ye_M          = self.load_hist_v_n('ye', norm)
         self.temp, self.temp_M      = self.load_hist_v_n('temperature', norm)
@@ -223,6 +225,10 @@ class SIM_EJ_HIST:
         self.theta, self.theta_M    = self.load_hist_v_n('theta', norm)
         self.entropy, self.entropy_M= self.load_hist_v_n('entropy', norm)
         self.theta_rms = self.load_theta_rms()
+        try:
+            self.vel_inf_bern, self.vel_inf_M_bern = self.load_hist_v_n('vel_inf_bern', norm)
+        except ValueError:
+            Printcolor.yellow("vel_inf_bern not found for {} {}".format(sim, extension))
 
     @staticmethod
     def normalize_histogram(M):
@@ -265,7 +271,7 @@ class SIM_EJ_HIST:
         Mej = self.mass_total_flux[-1]
         # Ye, M = np.loadtxt(self.outflow_path + Files.hist_ye, usecols=(0, 1), unpack=True)
         Ye_avg = np.sum(self.ye * self.ye_M) / Mej
-
+        if Ye_avg > .6: print(Ye_avg); exit(1)
         return Ye_avg
 
     def get_entropy_average(self):
@@ -283,6 +289,16 @@ class SIM_EJ_HIST:
 
         # vel_inf, M = np.loadtxt(self.outflow_path + Files.hist_vel_inf, usecols=(0, 1), unpack=True)
         vel_inf_avg = np.sum(self.vel_inf * self.vel_inf_M) / Mej
+        # vel_inf_avg *= 10 # [10^-1 c]
+
+        return vel_inf_avg
+
+    def get_average_vel_at_infinity_bern(self):
+
+        Mej = self.mass_total_flux[-1]
+
+        # vel_inf, M = np.loadtxt(self.outflow_path + Files.hist_vel_inf, usecols=(0, 1), unpack=True)
+        vel_inf_avg = np.sum(self.vel_inf_bern * self.vel_inf_M_bern) / Mej
         # vel_inf_avg *= 10 # [10^-1 c]
 
         return vel_inf_avg
@@ -339,6 +355,9 @@ class SIM_EJ_HIST:
 
         elif v_n == 'vel_inf':
             return self.get_average_vel_at_infinity()
+
+        elif v_n == 'vel_inf_bern':
+            return self.get_average_vel_at_infinity_bern()
 
         elif v_n == 'theta_rms':
             return self.theta_rms
@@ -1216,41 +1235,47 @@ class PLOT_EJECTA:
 
         self.task_dics=[]
 
-        # task_m_tot = {
-        #     'v_n':   ['m_tot'],
-        #     'ls':    ['-'],
-        #     'color': ['black'],
-        #     'label': ['Total mass']
-        # }
+        task_m_tot = {
+            'v_n':   ['m_tot'],
+            'ls':    ['-'],
+            'color': ['black'],
+            'label': ['Total mass']
+        }
         # self.task_dics.append(task_m_tot)
 
         task_m_unb = {
+            'sims':     ['DD2_M13641364_M0_SR',
+                         'DD2_M13641364_M0_SR'],
             'v_n':      ['m_unb', 'm_unb'],
             'criteria': ['geo', 'bern'],
             'ls':       ['-', '-'],
             'color':    ['black', 'red'],
             'label':    ['geo', 'bern']
         }
-        self.task_dics.append(task_m_unb)
+        # self.task_dics.append(task_m_unb)
 
         task_m_ej={
+            'sims':     ['DD2_M13641364_M0_SR',
+                         'DD2_M13641364_M0_SR'],
             'v_n':      ['m_ej', 'm_ej'],
             'extensions':['_0', '_0_b_w'],
             'ls':       ['-', '-'],
-            'color':    ['black', 'red'],
+            'color':    ['red', 'cyan'],
             'label':    ['', '']
         }
         self.task_dics.append(task_m_ej)
 
         task_m_disk={
+            'sims':     ['DD2_M13641364_M0_SR',
+                         'DD2_M13641364_M0_SR'],
             'v_n':      ['m_disk'],
             'ls':       ['-'],
             'color':    ['black'],
             'label':    ['Disk Mass']
         }
-        self.task_dics.append(task_m_disk)
+        # self.task_dics.append(task_m_disk)
 
-        self.figname = 'fluxes_disk'
+        self.figname = 'fluxes_DD2'
 
     @staticmethod
     def plot_gw(ax, gw_cl, ls='-', color='black', label='waveform'):
@@ -1368,7 +1393,7 @@ class PLOT_EJECTA:
         rows = len(self.task_dics)
         cols = 1
 
-        f, (ax_list) = plt.subplots(rows, cols, sharex=True, sharey=False, figsize=(4.5, 2.5 * 3.6))
+        f, (ax_list) = plt.subplots(rows, cols, sharex=True, sharey=False, figsize=(4.5, 3.6)) # 2.5 *
         # figsize=[len(sims) * len(tasks), 2 * len(tasks)])
 
         try:
@@ -1377,6 +1402,11 @@ class PLOT_EJECTA:
         except:
             tmerg = 0
             print("Warning: Failed lpading the GW (tmerger) -> time 0 is a beginning of simulation")
+
+        if rows == 1:
+            ax_list = [ax_list]
+
+
 
         for ax, task_dic in zip(ax_list, self.task_dics):
             self.plot_task(ax, task_dic, tmerg)
@@ -1405,11 +1435,14 @@ class PLOT_EJECTA:
 
 if __name__ == '__main__':
 
-    SIM_UNBOUND('DD2_M13641364_M0_SR')
-    SIM_DISK('DD2_M13641364_M0_SR')
-    SIM_EJ_HIST('DD2_M13641364_M0_SR')
-    profs = PLOT_PROFS('DD2_M13641364_M0_SR'); profs.plot_vn1_for_sim('flux')
-    hists = PLOT_HISTS('DD2_M13641364_M0_SR'); hists.plot_for_one_sim(['theta', 'vel_inf', 'ye'])
-    corrs = PLOT_CORRS('DD2_M13641364_M0_SR'); corrs.plot_vn1_vn2_for_sim('theta', 'vel_inf')
-    fluxs = PLOT_EJECTA('DD2_M13641364_M0_SR'); fluxs.plot_from_dic_fro_1sim()
+    # TODO For Average you are using only NOT normalized. SO you have to set a choce to get a normalized separately
+
+    SIM_UNBOUND('DD2_M13641364_M0_LK_LR_R04')
+    SIM_DISK('DD2_M13641364_M0_LK_LR_R04')
+    SIM_EJ_HIST('DD2_M13641364_M0_LK_LR_R04')
+    profs = PLOT_PROFS('DD2_M13641364_M0_LK_LR_R04');  profs.plot_vn1_for_sim('flux');
+    hists = PLOT_HISTS('DD2_M13641364_M0_LK_LR_R04');  hists.plot_for_one_sim(['theta', 'vel_inf', 'ye'])
+    corrs = PLOT_CORRS('DD2_M13641364_M0_LK_LR_R04');  corrs.plot_vn1_vn2_for_sim('theta', 'vel_inf')
+    corrs.plot_vn1_vn2_for_sim('theta', 'ye')
+    fluxs = PLOT_EJECTA('DD2_M13641364_M0_LK_LR_R04'); fluxs.plot_from_dic_fro_1sim()
 

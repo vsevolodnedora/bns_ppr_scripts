@@ -18,6 +18,22 @@ class Lists:
     eos = ["DD2", "LS220", "SFHo", "SLy4"]
     res = ["VLR", "LR", "SR", "HR"]
     neut= ["M0", "M1"]
+    visc= ["LK"]
+
+    dyn_not_pas = [
+                  "DD2_M13641364_M0_LK_HR_R04",
+                  "DD2_M13641364_M0_HR_R04",
+                  "DD2_M13641364_M0_HR",
+                  "DD2_M14861254_M0_HR",
+                  "LS220_M14001330_M0_HR",
+                  "LS220_M14351298_M0_HR",
+                  "LS220_M14691268_M0_HR",
+                  "LS220_M13641364_M0_HR",
+                  "SFHo_M13641364_M0_LR",
+                  "SFHo_M14521283_M0_LR",
+                  "SLy4_M13641364_M0_HR",
+                  "SLy4_M13641364_M0_LR",
+                  ]
 
     tarball = [
         # "bnstrackergen - bns_positions..asc",
@@ -94,6 +110,7 @@ class Files:
 
     # ejecta profile:
     ejecta_profile="ejecta_profile.dat"
+    ejecta_profile_bern= "ejecta_profile_bern.dat"
 
     # mkn
     mkn_model   = 'mkn_model.h5'

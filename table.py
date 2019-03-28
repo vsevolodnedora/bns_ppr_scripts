@@ -57,6 +57,16 @@ def fill_self_parameters():
         run["M2"] = m2
         run["EOS"] = eos
 
+def fill_self_dyn_phase_status():
+
+    Printcolor.blue("...adding dynamical phase info from static list")
+
+    for run in table:
+        if run["name"] in Lists.dyn_not_pas:
+            run["dyn_phase"] = "not passed"
+        else:
+            run["dyn_phase"] = "passed"
+
 # Parfile
 
 def get_par_form_parfile():
@@ -413,6 +423,8 @@ if __name__ == '__main__':
     # print([dic_lorene["lorene_file"] for dic_lorene in dics_lorene if dic_lorene["name"] == 'DD2_T05_15491205_45km_M0LKcorot'])
     # exit(1)
     fill_self_parameters()
+
+    fill_self_dyn_phase_status()
 
     # save_table('models.csv')
 

@@ -25,6 +25,8 @@ import h5py
 import csv
 import os
 
+
+
 from scidata.utils import locate
 import scidata.carpet.hdf5 as h5
 import scidata.xgraph as xg
@@ -39,6 +41,8 @@ from lists import *
 from filework import *
 from units import time_constant, volume_constant, energy_constant
 from gw import SIM_GW
+
+from scidata.carpet import hdf5
 
 class SIM_DISK:
 
@@ -507,6 +511,7 @@ class PLOT_PROFS:
                          'add_hist': True,
                          'hist_yscale': 'log',
                          'norm': LogNorm(1e-15, 1e-10),
+                         'figdir': Paths.ppr_sims  + sim + '/postprocess/'
                          }
 
         self.ye_dic = {'v_n': ['ye', 'ye'],  #   corr_vn1
@@ -517,6 +522,7 @@ class PLOT_PROFS:
                        'add_hist': True,
                        'hist_yscale': 'log',
                        'norm': Normalize(0., 0.5),
+                       'figdir': Paths.ppr_sims  + sim + '/postprocess/'
                        }
 
     @staticmethod
@@ -659,7 +665,7 @@ class PLOT_PROFS:
 
         # if v_n1 == 'x_arr': plt.xlim(right=90)
 
-        plt.savefig('{}{}.png'.format(Paths.plots, 'prof_{}'.format(dic['v_n'][0])), bbox_inches='tight', dpi=128)
+        plt.savefig('{}{}.png'.format(dic["figdir"], 'prof_{}'.format(dic['v_n'][0])), bbox_inches='tight', dpi=128)
         plt.close()
 
     def plot_vn1_for_sim(self, vn1):
@@ -678,12 +684,14 @@ class PLOT_HISTS:
         self.set_use_norm = False
         self.sim = sim
 
+        self.gen_set = {'figdir': Paths.ppr_sims + sim + '/postprocess/'}
+
         self.ye_dic = {'v_ns':  ['ye', 'ye'],               # var names to load the files
                       'extensions':   ['_0', '_0_b_w'],     # directories to use (_b or _b_d ... )
                       'colors':     ['black', 'red'],       # colors for plotting
                       'labels':     ['Geo', 'Bern. Wind.'], # labels to put
                       'norm':       [True, True]
-                      }
+                       }
         self.theta_dic = {'v_ns':['theta', 'theta'],
                      'extensions':   ['_0', '_0_b_w'],
                      'colors':   ['black', 'red'],
@@ -694,13 +702,13 @@ class PLOT_HISTS:
                        'extensions':['_0', '_0_b_w'],     # directories to use (_b or _b_d ... )
                        'colors':    ['black', 'red'],
                        'labels':    ['Geo', 'Bern. Wind.'],
-                       'norm': [True, True]
+                       'norm': [True, True],
                        }
         self.entropy_dic = {'v_ns': ['entropy', 'entropy'],
                        'extensions':['_0', '_0_b_w'],     # directories to use (_b or _b_d ... )
                        'colors':    ['black', 'red'],
                        'labels':    ['Geo', 'Bern. Wind.'],
-                       'norm': [True, True]
+                       'norm': [True, True],
                        }
 
     def plot_hist_ye(self, ax):
@@ -817,7 +825,7 @@ class PLOT_HISTS:
 
         plt.minorticks_on()
 
-        plt.savefig('{}{}.png'.format(Paths.plots, out_figname), bbox_inches='tight', dpi=128)
+        plt.savefig('{}{}.png'.format(self.gen_set["figdir"], out_figname), bbox_inches='tight', dpi=128)
         plt.close()
 
 class PLOT_CORRS:
@@ -836,6 +844,7 @@ class PLOT_CORRS:
                              'add_hist': False,
                              'norm': LogNorm(1e-4, 1e-1),
                              'out_name': 'corr_theta_ye',
+                             'figdir': Paths.ppr_sims  + sim + '/postprocess/'
                              }
 
         self.theta_vel_inf_dic = {'v_n1': ['theta', 'theta'],
@@ -846,6 +855,7 @@ class PLOT_CORRS:
                              'add_hist': False,
                              'norm': LogNorm(1e-4, 1e-1),
                              'out_name': 'corr_theta_vel_inf',
+                             'figdir': Paths.ppr_sims +  sim + '/postprocess/'
                              }
 
     @staticmethod
@@ -988,7 +998,7 @@ class PLOT_CORRS:
 
         # if v_n1 == 'x_arr': plt.xlim(right=90)
 
-        plt.savefig('{}{}.png'.format(Paths.plots, dic['out_name']), bbox_inches='tight', dpi=128)
+        plt.savefig('{}{}.png'.format(dic["figdir"], dic['out_name']), bbox_inches='tight', dpi=128)
         plt.close()
 
     def plot_vn1_vn2_for_sim(self, vn1, vn2):
@@ -1260,7 +1270,7 @@ class PLOT_EJECTA:
             'v_n':      ['m_ej', 'm_ej'],
             'extensions':['_0', '_0_b_w'],
             'ls':       ['-', '-'],
-            'color':    ['red', 'cyan'],
+            'color':    ['black', 'red'],
             'label':    ['', '']
         }
         self.task_dics.append(task_m_ej)
@@ -1273,9 +1283,12 @@ class PLOT_EJECTA:
             'color':    ['black'],
             'label':    ['Disk Mass']
         }
-        # self.task_dics.append(task_m_disk)
+        # self.task_dics.append(task_m_disk) # Paths.ppr_sims + sim + '/postprocess/', 'figname': 'fluxes.png'
 
-        self.figname = 'fluxes_DD2'
+        self.gen_set = {'figdir': Paths.plots,
+                        'figname': 'fluxes_{}'.format(sim)}
+
+        # self.figname = 'fluxes_DD2'
 
     @staticmethod
     def plot_gw(ax, gw_cl, ls='-', color='black', label='waveform'):
@@ -1430,19 +1443,20 @@ class PLOT_EJECTA:
         plt.tick_params(axis='both', which='both', labelleft=True, labelright=False, tick1On=True, tick2On=True,
                         labelsize=12, direction='in')  # labeltop
         plt.minorticks_on()
-        plt.savefig('{}{}.png'.format(Paths.plots, self.figname), bbox_inches='tight', dpi=128)
+        plt.savefig('{}{}.png'.format(self.gen_set["figdir"], self.gen_set["figname"]), bbox_inches='tight', dpi=128)
         plt.close()
 
 if __name__ == '__main__':
 
     # TODO For Average you are using only NOT normalized. SO you have to set a choce to get a normalized separately
+    # TODO ADD PROPER WAY OF SAVING THE FIGURES INTO THE SIMULATION FOLDER, INTO THE RESULTS/
 
-    SIM_UNBOUND('DD2_M13641364_M0_LK_LR_R04')
-    SIM_DISK('DD2_M13641364_M0_LK_LR_R04')
-    SIM_EJ_HIST('DD2_M13641364_M0_LK_LR_R04')
-    profs = PLOT_PROFS('DD2_M13641364_M0_LK_LR_R04');  profs.plot_vn1_for_sim('flux');
-    hists = PLOT_HISTS('DD2_M13641364_M0_LK_LR_R04');  hists.plot_for_one_sim(['theta', 'vel_inf', 'ye'])
-    corrs = PLOT_CORRS('DD2_M13641364_M0_LK_LR_R04');  corrs.plot_vn1_vn2_for_sim('theta', 'vel_inf')
+    SIM_UNBOUND('LS220_M13641364_M0_SR')
+    SIM_DISK('LS220_M13641364_M0_SR')
+    SIM_EJ_HIST('LS220_M13641364_M0_SR')
+    profs = PLOT_PROFS('LS220_M13641364_M0_SR');  profs.plot_vn1_for_sim('flux')
+    hists = PLOT_HISTS('LS220_M13641364_M0_SR');  hists.plot_for_one_sim(['theta', 'vel_inf', 'ye'])
+    corrs = PLOT_CORRS('LS220_M13641364_M0_SR');  corrs.plot_vn1_vn2_for_sim('theta', 'vel_inf')
     corrs.plot_vn1_vn2_for_sim('theta', 'ye')
-    fluxs = PLOT_EJECTA('DD2_M13641364_M0_LK_LR_R04'); fluxs.plot_from_dic_fro_1sim()
+    fluxs = PLOT_EJECTA('DD2_M13641364_M0_SR'); fluxs.plot_from_dic_fro_1sim()
 

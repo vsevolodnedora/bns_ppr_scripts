@@ -19,6 +19,11 @@ class Lists:
     res = ["VLR", "LR", "SR", "HR"]
     neut= ["M0", "M1"]
     visc= ["LK"]
+    # q   = [1.0, 1.05, 1.1, 1.11, 1.13, 1.16, 1.19, 1.2, 1.22, 1.29]
+    # q   = [1.0, 1.053, 1.102, 1.106, 1.132, 1.159, 1.185, 1.201, 1.222, 1.285]
+    colors_q={1.000:"firebrick", 1.053:"red", 1.102:"gold",
+              1.106:"darkkhaki", 1.132:"olivedrab", 1.159:"darkgreen",
+              1.185:"lightseagreen", 1.201:"darkgreen", 1.222:"royalblue", 1.285:"navy"}
 
     dyn_not_pas = [
                   "DD2_M13641364_M0_LK_HR_R04",

@@ -293,14 +293,22 @@ class PLOT_MODELS:
         #     ax.plot(sim[v_n1], sim[v_n2], 'x',
         #             color=eos_color(sim["EOS"]))
 
+        idx = 1
         for isim, sim in sims.iterrows():
 
             ej = SIM_EJ_HIST(isim)
 
-            ax.plot(ej.time_total_flux, ej.mass_total_flux, '-', label=r'${}$'.format(str(isim).replace('_', '\_')))
-            ax.plot(sim[v_n1], sim[v_n2], 'x')
-            # ax.annotate(r'${}$'.format(str(isim).replace('_', '\_')), xy=(sim[v_n1], sim[v_n2]),
-            #             textcoords='data')
+            color=get_color_for_q(sim["M1"]/sim["M2"])
+
+            ax.plot(ej.time_total_flux, ej.mass_total_flux, '-', color=color,
+                    label=r'${}:{}$'.format(idx, str(isim).replace('_', '\_')))
+            if not np.isinf(sim["tcoll"]):
+
+                ax.plot(sim[v_n1], sim[v_n2], 'o', color=color)
+
+            # ax.plot(sim[v_n1], sim[v_n2], 'x', color=color)
+            ax.annotate(r'${}$'.format(idx), xy=(sim[v_n1], sim[v_n2]), textcoords='data')
+            idx += 1
 
         ax.legend(fancybox=False, loc='best',shadow=False, fontsize=8)
 
@@ -387,9 +395,12 @@ class PLOT_MODELS:
                 sims = sim_cl.get_selected_models(lim_dic_in)
                 ax = sbplot_matrix[n_col][n_row]
                 PLOT_MODELS.plot_one_ejecta_prof(ax, sims)
+                # ax.set_xlim(left=1e-2)
+                # ax.set_xscale("log")
+                # ax.set_xlim(left=1e-2,right=5e-1)
 
                 if n_col == 0:
-                    ax.text(0.9, 0.8, '{}'.format(list_EOSs[n_row]),
+                    ax.text(0.9, 0.2, '{}'.format(list_EOSs[n_row]),
                             verticalalignment='bottom', horizontalalignment='right',
                             transform=ax.transAxes, color='black', fontsize=12)
 
@@ -400,6 +411,7 @@ class PLOT_MODELS:
 
                 if n_col > 0 and n_row < n_rows-1:
                     sbplot_matrix[n_col][n_row].tick_params(labelbottom=False)
+                if n_col > 0 and n_row < n_rows:
                     sbplot_matrix[n_col][n_row].tick_params(labelleft=False)
 
                 # ax.set_yscale('log')
@@ -414,7 +426,7 @@ class PLOT_MODELS:
         plt.subplots_adjust(hspace=0.0)
         plt.subplots_adjust(wspace=0.0)
 
-        plt.savefig(Paths.plots + '__tst', bbox_inches='tight', dpi=128)
+        plt.savefig(Paths.plots + 'flux_evolution.pdf', bbox_inches='tight', dpi=128)
         plt.legend()
         plt.close()
 
@@ -619,8 +631,8 @@ if __name__ == '__main__':
     #
     # sims = sim_cl.get_selected_models(lim_dic_in)
 
-    # PLOT_MODELS.plot_vn1_vn2_flux_evolution2()
-    PLOT_MODELS.plot_final_average(['Mej'], ['vej']) # 'vej', 'Yeej'
+    PLOT_MODELS.plot_vn1_vn2_flux_evolution2()
+    # PLOT_MODELS.plot_final_average(['Mej'], ['vej']) # 'vej', 'Yeej'
 
 
 

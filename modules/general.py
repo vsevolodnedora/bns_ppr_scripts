@@ -162,15 +162,15 @@ class PHYSICS:
         pass
 
     @staticmethod
-    def get_dens_decomp_2d(dens_3d, phi_3d, dphi_3d, dr_3d, m=1):
+    def get_dens_decomp_2d(dens_2d, phi_2d, dphi_2d, dr_2d, m=1):
         '''
         Uses a 2d slice at z=0
         Returns complex arrays [\int(d\phi)] and [\int(dr d\phi)]
         '''
-        dens_2d = dens_3d[:, :, 0]
-        phi_2d  = phi_3d[:, :, 0]
-        dr_2d   = dr_3d[:, :, 0]
-        dphi_2d = dphi_3d[:, :, 0]
+        # dens_2d = dens_3d[:, :, 0]
+        # phi_2d  = phi_3d[:, :, 0]
+        # dr_2d   = dr_3d[:, :, 0]
+        # dphi_2d = dphi_3d[:, :, 0]
 
         integ_over_phi = np.sum(dens_2d * np.exp(1j * m * phi_2d) * dphi_2d, axis=1)
 
@@ -253,7 +253,10 @@ def eos_color(eos):
         Printcolor.yellow("Unknown eos:{} [color->black]".format(eos))
         return 'black'
 
-#
+def get_color_for_q(q):
+    return Lists.colors_q[round(q, 3)]
+
+
 def interpoate_time_form_it(it_list, file_it_use, time_units='s'):
     '''
     From list of iterations, returns a list of timesteps (in seconds)

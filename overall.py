@@ -631,8 +631,8 @@ if __name__ == '__main__':
     #
     # sims = sim_cl.get_selected_models(lim_dic_in)
 
-    PLOT_MODELS.plot_vn1_vn2_flux_evolution2()
-    # PLOT_MODELS.plot_final_average(['Mej'], ['vej']) # 'vej', 'Yeej'
+    # PLOT_MODELS.plot_vn1_vn2_flux_evolution2()
+    PLOT_MODELS.plot_final_average(['Lambda'], ['Mej', 'vej']) # 'vej', 'Yeej'
 
 
 

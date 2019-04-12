@@ -79,10 +79,11 @@ class LOAD_STORE_DATASETS:
         self.sim = sim
 
         self.gen_set = {'nlevels':7,
+                        'sim': sim,
                         'file_for_it': 'H.norm2.asc',
                         'iterations':0,
                         'indir': Paths.gw170817 + sim + '/',
-                        'outdir': Paths.ppr_sims + sim + '/2d/'}
+                        'outdir': Paths.ppr_sims + sim + '/res_2d/'}
 
         self.output_it_map = {}
         self.it_time = self.set_it_output_map()
@@ -247,20 +248,24 @@ class LOAD_STORE_DATASETS:
     #         times.append(self.get_time(iteration))
     #     return times
 
+
 class EXTRACT_STORE_DATA(LOAD_STORE_DATASETS):
     """
     blablabla
     """
 
     def __init__(self, sim):
-        self.gen_set = {'nlevels': 7,
-                        'file_for_it': 'H.norm2.asc',
-                        'iterations': 0,
-                        'indir': Paths.gw170817 + sim + '/',
-                        'outdir': Paths.ppr_sims + sim + '/2d/'}
 
-        self.list_v_ns   = ['rho', 'Y_e', 'temperature', 's_phi', 'entropy', 'dens_unbnd']
-        self.list_planes = ['xy', 'xz']
+        LOAD_STORE_DATASETS.__init__(self, sim)
+
+        # self.gen_set = {'nlevels': 7,
+        #                 'file_for_it': 'H.norm2.asc',
+        #                 'iterations': 0,
+        #                 'indir': Paths.gw170817 + sim + '/',
+        #                 'outdir': Paths.ppr_sims + sim + '/2d/'}
+
+        # self.list_v_ns   = ['rho', 'Y_e', 'temperature', 's_phi', 'entropy', 'dens_unbnd']
+        # self.list_planes = ['xy', 'xz']
         self.v_n_map = {
             'rho':          "HYDROBASE::rho",
             'Y_e':          "HYDROBASE::Y_e",
@@ -270,7 +275,7 @@ class EXTRACT_STORE_DATA(LOAD_STORE_DATASETS):
             'dens_unb':     "BNSANALYSIS::dens_unbnd"
         }
 
-        LOAD_STORE_DATASETS.__init__(self, sim)
+
         # self.output_it_map = {}
         # self.it_time = self.set_it_output_map()
 
@@ -389,6 +394,7 @@ class EXTRACT_STORE_DATA(LOAD_STORE_DATASETS):
 
     # def get_time_(self, it):
     #     return self.get_time__(it)
+
 
 class CYLINDRICAL_GRID:
     """
@@ -663,9 +669,9 @@ class PLOT_MANY:
         self.data = data_class
 
         self.gen_set = {
-            "figdir": "./",
+            "figdir": self.data.gen_set["outdir"],
             "figname": "tst.png",
-            "figsize": (8.5, 2.8),
+            "figsize": (3.5, 3.8),
             "type": "polar",
             "subplots_adjust_h": 0.2,
             "subplots_adjust_w": 0.2
@@ -679,7 +685,7 @@ class PLOT_MANY:
             'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
             'cmap': 'RdBu_r', 'norm': 'log', 'todo': None
         }
-        self.set_plot_dics.append(plot_dic1)
+        # self.set_plot_dics.append(plot_dic1)
 
         plot_dic2 = {
             'position': (1,2), 'title': 'time [ms]', 'cbar': None,
@@ -687,7 +693,7 @@ class PLOT_MANY:
             'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
             'cmap': 'RdBu_r', 'norm': 'log', 'todo': None
         }
-        self.set_plot_dics.append(plot_dic2)
+        # self.set_plot_dics.append(plot_dic2)
 
         plot_dic2 = {
             'position': (1,3), 'title': 'time [ms]', 'cbar': None,
@@ -695,24 +701,12 @@ class PLOT_MANY:
             'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
             'cmap': 'RdBu_r', 'norm': 'log', 'todo': None
         }
-        self.set_plot_dics.append(plot_dic2)
-
-        '''---------------------------------------------'''
-
-        # initializing the n_cols, n_rows
-        self.n_rows, self.n_cols = self.set_ncols_nrows()
-        # initializing the matrix of dictionaries of the
-        self.plot_dic_matrix = self.set_plot_dics_matrix()
-        # initializing the axis matrix (for all subplots) and image matrix fo colorbars
-        self.fig, self.sbplot_matrix = self.set_plot_matrix()
-        # plotting
-        self.image_matrix = self.plot_images()
-        # adding colobars
-        self.plot_colobars()
+        # self.set_plot_dics.append(plot_dic2)
 
 
-        # saving the result
-        self.save_plot()
+
+
+
 
     def set_ncols_nrows(self):
 
@@ -917,6 +911,13 @@ class PLOT_MANY:
                         pos1.y0,
                         cbar_width,
                         pos1.height]
+            elif location == 'left':
+                ax_to_use = self.sbplot_matrix[-1][n_row]
+                pos1 = ax_to_use.get_position()
+                pos2 = [pos1.x0 - pos1.width - shift_h,
+                        pos1.y0,
+                        cbar_width,
+                        pos1.height]
             elif location == 'bottom':
                 ax_to_use = self.sbplot_matrix[n_col][-1]
                 pos1 = ax_to_use.get_position()
@@ -929,7 +930,15 @@ class PLOT_MANY:
                                 .format(location))
 
             cax1 = self.fig.add_axes(pos2)
-            cbar = plt.colorbar(im, cax=cax1, extend='both', format='%.1e')
+            if location == 'right':
+                cbar = plt.colorbar(im, cax=cax1, extend='both', format='%.1e')
+            elif location == 'left':
+                cbar = plt.colorbar(im, cax=cax1, extend='both', format='%.1e')
+                cax1.yaxis.set_ticks_position('left')
+                cax1.yaxis.set_label_position('left')
+            else:
+                raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
+                                .format(location))
             cbar.ax.set_title(r"{}".format(str(dic["v_n"]).replace('_', '\_')))
 
 
@@ -957,6 +966,23 @@ class PLOT_MANY:
         plt.savefig('{}{}'.format(self.gen_set["figdir"], self.gen_set["figname"]),
                     bbox_inches='tight', dpi=128)
         plt.close()
+
+    def main(self):
+
+        # initializing the n_cols, n_rows
+        self.n_rows, self.n_cols = self.set_ncols_nrows()
+        # initializing the matrix of dictionaries of the
+        self.plot_dic_matrix = self.set_plot_dics_matrix()
+        # initializing the axis matrix (for all subplots) and image matrix fo colorbars
+        self.fig, self.sbplot_matrix = self.set_plot_matrix()
+        # plotting
+        self.image_matrix = self.plot_images()
+        # adding colobars
+        self.plot_colobars()
+
+
+        # saving the result
+        self.save_plot()
 
 # class PLOT_2D:
 #
@@ -2384,6 +2410,7 @@ class COMPUTE_STORE_DESITYMODES:
 
         print('-' * 30 + '------DONE-----' + '-' * 30)
 
+
 def plot_density_modes(sim):
 
     gen_set = {
@@ -2462,20 +2489,171 @@ def plot_density_modes(sim):
     plt.close()
 
 
+
+def task_movie1():
+
+    int_ = INTERPOLATE_STORE("LS220_M13641364_M0_SR")
+    pl_ = PLOT_MANY(int_)
+
+    pl_.gen_set = {
+        "figdir": int_.gen_set["outdir"] + 'movie/',
+        "figname": "tst.png",
+        "figsize": (3.5, 3.8),
+        "type": "polar",
+        "subplots_adjust_h": 0.2,
+        "subplots_adjust_w": 0.2
+    }
+
+    plot_dic1 = {
+        'position': (1, 1), 'title': 'time [ms]', 'cbar': 'right .05 .0',
+        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'temperature',
+        'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'RdBu_r', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic1)
+
+    int_.load_all(plot_dic1['plane'], plot_dic1['v_n'])
+
+    int_.iterations = int_.get_all_iterations(plot_dic1["plane"], plot_dic1["v_n"])
+    int_.iterations = np.array(int_.iterations, dtype=int)
+    int_.iterations.sort(axis=0)
+
+    for it in int_.iterations:
+        try:
+            pl_.gen_set["figname"] = "{0:07d}.png".format(int(it)) # 7 digit output
+            pl_.set_plot_dics[0]["it"] = it
+            pl_.main()
+        except ValueError:
+            Printcolor.yellow("Warning. it:{} failed with ValueError".format(it))
+
+def task_movie2():
+
+    int_ = INTERPOLATE_STORE("LS220_M13641364_M0_SR")
+    pl_ = PLOT_MANY(int_)
+
+    pl_.gen_set = {
+        "figdir": int_.gen_set["outdir"] + 'movie/',
+        "figname": "tst.png",
+        "figsize": (3.5, 3.8),
+        "type": "polar",
+        "subplots_adjust_h": 0.2,
+        "subplots_adjust_w": 0.2
+    }
+
+    # RdBu_r
+    plot_dic1 = {
+        'position': (1, 1), 'title': 'time [ms]', 'cbar': 'left .15 .0',
+        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'rho',
+        'vmin': 1e-6, 'vmax': 5e-6, 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic1)
+
+    plot_dic2 = {
+        'position': (1, 2), 'title': 'it', 'cbar': 'right .05 .0',
+        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'Y_e',
+        'vmin': 0.05, 'vmax': 0.45, 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic2)
+
+    plot_dic2 = {
+        'position': (2, 1), 'title': None, 'cbar': 'left .15 .0',
+        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'temperature',
+        'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic2)
+
+    plot_dic2 = {
+        'position': (2, 2), 'title': None, 'cbar': 'right .05 .0',
+        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'entropy',
+        'vmin': 0, 'vmax': 30, 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic2)
+
+    int_.load_all(plot_dic1['plane'], plot_dic1['v_n'])
+
+    int_.iterations = int_.get_all_iterations(plot_dic1["plane"], plot_dic1["v_n"])
+    int_.iterations = np.array(int_.iterations, dtype=int)
+    int_.iterations.sort(axis=0)
+
+    for it in int_.iterations:
+        try:
+            pl_.gen_set["figname"] = "{0:07d}.png".format(int(it)) # 7 digit output
+            for dic in pl_.set_plot_dics:
+                dic["it"] = it
+            pl_.main()
+        except ValueError:
+            Printcolor.yellow("Warning. it:{} failed with ValueError".format(it))
+
+
+def task_plot_many():
+
+    int_ = INTERPOLATE_STORE("LS220_M13641364_M0_SR")
+    pl_ = PLOT_MANY(int_)
+
+    pl_.gen_set = {
+        "figdir": int_.gen_set["outdir"],
+        "figname": "tst.png",
+        "figsize": (5.5, 5.5),
+        "type": "polar",
+        "subplots_adjust_h": 0.2,
+        "subplots_adjust_w": 0.2
+    }
+    # RdBu_r
+    plot_dic1 = {
+        'position': (1, 1), 'title': 'time [ms]', 'cbar': 'left .15 .0',
+        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'rho',
+        'vmin': 1e-6, 'vmax': 5e-6, 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic1)
+
+    plot_dic2 = {
+        'position': (1, 2), 'title': 'it', 'cbar': 'right .05 .0',
+        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'Y_e',
+        'vmin': 0.05, 'vmax': 0.45, 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic2)
+
+    plot_dic2 = {
+        'position': (2, 1), 'title': None, 'cbar': 'left .15 .0',
+        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'temperature',
+        'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic2)
+
+    plot_dic2 = {
+        'position': (2, 2), 'title': None, 'cbar': 'right .05 .0',
+        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'entropy',
+        'vmin': 0, 'vmax': 30, 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic2)
+
+    pl_.main()
+
 if __name__ == '__main__':
 
+    ''' --- MOVIE --- '''
+    # task_movie1() # for 1 plot of temperature
+    task_movie2() # 4 plots with rho, temp, ye, entropy
+
     ''' --- PLOT XY PROJECIONS OF MULTIPLE ITERATIONS --- '''
-    # int_ = INTERPOLATE_STORE("LS220_M13641364_M0_SR")
-    # pl_ = PLOT_MANY(int_)
+    # task_plot_many()
 
     ''' --- COMPUTE rho MODES --- '''
-    int_ = INTERPOLATE_STORE("LS220_M13641364_M0_SR")
-    dm = COMPUTE_STORE_DESITYMODES(int_); dm.save_all_modes()
+    # int_ = INTERPOLATE_STORE('DD2_M13641364_M0_SR')
+    # dm = COMPUTE_STORE_DESITYMODES(int_); dm.save_all_modes()
 
     ''' --- PLOT rho MODES --- '''
-    plot_density_modes("LS220_M13641364_M0_SR")
+    # plot_density_modes('DD2_M13641364_M0_SR')
 
-    ''' TESTING NEW '''
+    # ''' TESTING NEW '''
     # data = EXTRACT_STORE_DATA("LS220_M13641364_M0_SR")
     # print(len(data.get_data(1013760, 'xy', 'temperature')))
     # exit(1)

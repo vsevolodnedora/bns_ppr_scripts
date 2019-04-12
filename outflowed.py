@@ -511,7 +511,7 @@ class PLOT_PROFS:
                          'add_hist': True,
                          'hist_yscale': 'log',
                          'norm': LogNorm(1e-15, 1e-10),
-                         'figdir': Paths.ppr_sims  + sim + '/postprocess/'
+                         'figdir': Paths.ppr_sims + sim + '/res_1d/'
                          }
 
         self.ye_dic = {'v_n': ['ye', 'ye'],  #   corr_vn1
@@ -522,7 +522,7 @@ class PLOT_PROFS:
                        'add_hist': True,
                        'hist_yscale': 'log',
                        'norm': Normalize(0., 0.5),
-                       'figdir': Paths.ppr_sims  + sim + '/postprocess/'
+                       'figdir': Paths.ppr_sims + sim + '/res_1d/'
                        }
 
     @staticmethod
@@ -684,7 +684,7 @@ class PLOT_HISTS:
         self.set_use_norm = False
         self.sim = sim
 
-        self.gen_set = {'figdir': Paths.ppr_sims + sim + '/postprocess/'}
+        self.gen_set = {'figdir': Paths.ppr_sims + sim + '/res_1d/'}
 
         self.ye_dic = {'v_ns':  ['ye', 'ye'],               # var names to load the files
                       'extensions':   ['_0', '_0_b_w'],     # directories to use (_b or _b_d ... )
@@ -844,7 +844,7 @@ class PLOT_CORRS:
                              'add_hist': False,
                              'norm': LogNorm(1e-4, 1e-1),
                              'out_name': 'corr_theta_ye',
-                             'figdir': Paths.ppr_sims  + sim + '/postprocess/'
+                             'figdir': Paths.ppr_sims + sim + '/res_1d/',
                              }
 
         self.theta_vel_inf_dic = {'v_n1': ['theta', 'theta'],
@@ -855,7 +855,7 @@ class PLOT_CORRS:
                              'add_hist': False,
                              'norm': LogNorm(1e-4, 1e-1),
                              'out_name': 'corr_theta_vel_inf',
-                             'figdir': Paths.ppr_sims +  sim + '/postprocess/'
+                             'figdir': Paths.ppr_sims + sim + '/res_1d/',
                              }
 
     @staticmethod
@@ -1271,7 +1271,8 @@ class PLOT_EJECTA:
             'extensions':['_0', '_0_b_w'],
             'ls':       ['-', '-'],
             'color':    ['black', 'red'],
-            'label':    ['', '']
+            'label':    ['', ''],
+            'tcoll':    True
         }
         self.task_dics.append(task_m_ej)
 
@@ -1285,8 +1286,8 @@ class PLOT_EJECTA:
         }
         # self.task_dics.append(task_m_disk) # Paths.ppr_sims + sim + '/postprocess/', 'figname': 'fluxes.png'
 
-        self.gen_set = {'figdir': Paths.plots,
-                        'figname': 'fluxes_{}'.format(sim)}
+        self.gen_set = {'figdir': Paths.ppr_sims + sim + '/res_1d/',
+                        'figname': 'fluxes'}
 
         # self.figname = 'fluxes_DD2'
 
@@ -1369,6 +1370,12 @@ class PLOT_EJECTA:
     def plot_task(self, ax, task_dic, tmerg=0):
 
         if task_dic['v_n'][0] == 'm_ej':
+            if task_dic['tcoll']:
+                unb_cl = SIM_UNBOUND(self.sim)
+                tcoll, mdisk = unb_cl.tcoll, unb_cl.diskmass_tcol
+                if np.isfinite(tcoll):
+                    ax.axvline(x=((tcoll - tmerg) * 1000), linestyle='--', linewidth=0.5, color='black')
+
             for i in range(len(task_dic['v_n'])):
                 ej_cl = SIM_EJ_HIST(self.sim, task_dic['extensions'][i], True) # True for norm
                 self.plot_m_ej(ax, ej_cl, tmerg, ls=task_dic['ls'][i], color=task_dic['color'][i],
@@ -1449,14 +1456,15 @@ class PLOT_EJECTA:
 if __name__ == '__main__':
 
     # TODO For Average you are using only NOT normalized. SO you have to set a choce to get a normalized separately
-    # TODO ADD PROPER WAY OF SAVING THE FIGURES INTO THE SIMULATION FOLDER, INTO THE RESULTS/
 
-    SIM_UNBOUND('LS220_M13641364_M0_SR')
-    SIM_DISK('LS220_M13641364_M0_SR')
-    SIM_EJ_HIST('LS220_M13641364_M0_SR')
-    profs = PLOT_PROFS('LS220_M13641364_M0_SR');  profs.plot_vn1_for_sim('flux')
-    hists = PLOT_HISTS('LS220_M13641364_M0_SR');  hists.plot_for_one_sim(['theta', 'vel_inf', 'ye'])
-    corrs = PLOT_CORRS('LS220_M13641364_M0_SR');  corrs.plot_vn1_vn2_for_sim('theta', 'vel_inf')
+    sim = "LS220_M13501350_M0_SR"
+
+    SIM_UNBOUND(sim)
+    SIM_DISK(sim)
+    SIM_EJ_HIST(sim)
+    profs = PLOT_PROFS(sim);  profs.plot_vn1_for_sim('flux')
+    hists = PLOT_HISTS(sim);  hists.plot_for_one_sim(['theta', 'vel_inf', 'ye'])
+    corrs = PLOT_CORRS(sim);  corrs.plot_vn1_vn2_for_sim('theta', 'vel_inf')
     corrs.plot_vn1_vn2_for_sim('theta', 'ye')
-    fluxs = PLOT_EJECTA('DD2_M13641364_M0_SR'); fluxs.plot_from_dic_fro_1sim()
+    fluxs = PLOT_EJECTA(sim); fluxs.plot_from_dic_fro_1sim()
 

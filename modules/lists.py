@@ -12,6 +12,7 @@ class Paths:
     plots =     '/data01/numrel/vsevolod.nedora/figs/'
     mkn =       '/data01/numrel/vsevolod.nedora/macrokilonova_bayes/mk_source/source/'
     home =      '/data01/numrel/vsevolod.nedora/bns_ppr_scripts/'
+    SLy4_hydo=  '/data01/numrel/vsevolod.nedora/Data/EOS/SLy4/SLy4_hydro_14-Dec-2017.h5'
 
 class Lists:
 

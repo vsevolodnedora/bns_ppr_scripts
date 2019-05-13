@@ -55,7 +55,7 @@ class SIM_DISK:
         self.time_disk, self.disk_mass = self.load_disk_mass_ev()
         print("\t done! (%.2f sec)" % (time.time() - start_t))
 
-    def load_disk_mass_ev(self, do_remove_nans=True):
+    def old_load_disk_mass_ev(self, do_remove_nans=True):
 
         try:
             t_disk_evol, m_disk_evol = np.loadtxt(MakePath.collated2(self.sim) + Files.disk_mass,
@@ -73,9 +73,70 @@ class SIM_DISK:
                 raise ValueError('Error in removing nans from disk')
         return t_disk_evol, m_disk_evol # time in [s]
 
+    def load_disk_mass_ev(self):
+
+        # check if res_3d exists:
+        if not os.path.isdir(Paths.ppr_sims + self.sim + "/res_3d/"):
+            return np.zeros(0,), np.zeros(0,)
+
+
+        # check if any disk_mass.txt exist:
+        it_dirs = os.listdir(Paths.ppr_sims + self.sim + "/res_3d/")
+        iterations, disk_masses = [], []
+        if len(it_dirs) == 0:
+            Printcolor.yellow("No iteration directories found in {}".format(self.sim + "/res_3d/"))
+        else:
+            for it_dir in it_dirs:
+                path = Paths.ppr_sims + self.sim + "/res_3d/" + it_dir + '/' + "disk_mass.txt"
+                # print(path)
+                if os.path.isfile(path):
+                    try:
+                        it = int(it_dir)
+                    except:
+                        raise ValueError("faild to extract interation from disk_mass.txt path:\n{}"
+                                         .format(path))
+                    try:
+                        mass = np.float(np.loadtxt(path, unpack=True))
+                    except:
+                        raise ValueError("failed to load disk_mass.txt from")
+
+                    iterations.append(it)
+                    disk_masses.append(mass)
+
+        if len(iterations) == 0:
+            Printcolor.yellow("While {} exists, there are no 'disk_mass.txt files in it".format(self.sim + "/res_3d/"))
+            return np.zeros(0, ), np.zeros(0, )
+
+        # get times for iterations:
+        path_ittime = Paths.ppr_sims + self.sim + "/res_3d/" + "ittime.txt"
+        if os.path.isfile(path_ittime):
+            it_time_masses = np.zeros(3)
+            all_iterations, all_times = np.loadtxt(path_ittime, usecols=(0, 1), unpack=True)
+            for it, m in zip(iterations, disk_masses):
+                if it not in all_iterations:
+                    raise ValueError("it:{} not in all_iteration:{} (from ittime.txt)"
+                                     .format(it, all_iterations))
+                time_ = int(np.where(it == all_iterations)[0])
+                it_time_masses = np.vstack(it_time_masses, [it, time_, m])
+            it_time_masses = it_time_masses[1:-1, 1:-1, 1:-1]
+        else:
+            Printcolor.yellow("file ittime.txt not found in {}".format(self.sim + "/res_3d/"))
+            times = list(interpoate_time_form_it(iterations, Paths.gw170817 + self.sim + '/', time_units='s',
+                                            extrapolate=True))
+            print(np.array(iterations).shape, np.array(times).shape, np.array(disk_masses).shape)
+
+            it_time_masses = np.vstack((iterations, times, disk_masses)).T
+
+        # print(it_time_masses)
+
+
+        final_times, final_masses = x_y_z_sort(it_time_masses[:,1], it_time_masses[:,2],np.zeros(0,), 0)
+
+        return final_times, final_masses
+
     def get_par(self, v_n):
         if v_n == 'Mdisk_last':
-            if any(self.disk_mass):
+            if self.disk_mass.any():
                 return self.disk_mass[-1]
             else:
                 return np.nan
@@ -315,6 +376,14 @@ class SIM_EJ_HIST:
 
         return Ekin
 
+    def get_average_kin_energy_bern(self):
+
+        # _, M = np.loadtxt(self.outflow_path + Files.hist_entropy, usecols=(0, 1), unpack=True)
+        vel_inf = self.get_average_vel_at_infinity_bern()
+        Ekin = np.sum(0.5 * vel_inf ** 2 * self.vel_inf_M_bern) * energy_constant # 10^51 erg
+
+        return Ekin
+
     def load_theta_rms(self):
 
         theta_hist = np.loadtxt(self.outflow_path + Files.hist_theta, unpack=True)
@@ -368,6 +437,9 @@ class SIM_EJ_HIST:
 
         elif v_n == 'E_kin':
             return self.get_average_kin_energy()
+
+        elif v_n == 'E_kin_bern':
+            return self.get_average_kin_energy_bern()
 
 
         else: raise NameError('v_n:{} is not available.'.format(v_n))
@@ -581,12 +653,11 @@ class PLOT_PROFS:
         # fig = plt.figure()
         # ax = fig.add_subplot(111)
 
-        try:
-            gw = SIM_GW(self.sim)
-            tmerg = gw.load_tmerg()
-        except:
-            tmerg = 0.
+        gw = SIM_GW(self.sim)
+        tmerg = gw.load_tmerg()
+        if np.isnan(tmerg):
             Printcolor.yellow("Warning: Merger time is not loaded")
+            tmerg = 0.
 
         for i in range(len(dic['v_n'])):
             prof_cl = SIM_PROF(self.sim, dic['extensions'][i])
@@ -665,6 +736,9 @@ class PLOT_PROFS:
 
         # if v_n1 == 'x_arr': plt.xlim(right=90)
 
+        if not os.path.exists(dic["figdir"]):
+            os.makedirs(dic["figdir"])
+
         plt.savefig('{}{}.png'.format(dic["figdir"], 'prof_{}'.format(dic['v_n'][0])), bbox_inches='tight', dpi=128)
         plt.close()
 
@@ -682,39 +756,49 @@ class PLOT_HISTS:
     def __init__(self, sim):
 
         self.set_use_norm = False
-        self.sim = sim
+        # self.sim = sim
 
-        self.gen_set = {'figdir': Paths.ppr_sims + sim + '/res_1d/'}
+        self.gen_set = {'figdir': Paths.ppr_sims + sim + '/res_1d/',
+                        'figname': 'tst_hists',
+                        'figsize':[9, 3.8]}
 
-        self.ye_dic = {'v_ns':  ['ye', 'ye'],               # var names to load the files
-                      'extensions':   ['_0', '_0_b_w'],     # directories to use (_b or _b_d ... )
-                      'colors':     ['black', 'red'],       # colors for plotting
-                      'labels':     ['Geo', 'Bern. Wind.'], # labels to put
-                      'norm':       [True, True]
+        self.ye_dic = {
+                      'sims':[sim, sim, sim],
+                      'v_ns':  ['ye', 'ye', 'ye'],               # var names to load the files
+                      'extensions':   ['_0', '_0_b_w', '_0_b'],     # directories to use (_b or _b_d ... )
+                      'colors':     ['black', 'red', 'orange'],       # colors for plotting
+                      'labels':     ['Geo', 'Bern. Wind.', 'exclusive'], # labels to put
+                      'norm':       [True, True, True]
                        }
-        self.theta_dic = {'v_ns':['theta', 'theta'],
-                     'extensions':   ['_0', '_0_b_w'],
-                     'colors':   ['black', 'red'],
-                     'labels':   ['Geo', 'Bern. Wind.'],
-                     'norm': [True, True]
+        self.theta_dic = {
+                     'sims': [sim, sim, sim],
+                     'v_ns':['theta', 'theta', 'theta'],
+                     'extensions':   ['_0', '_0_b_w', '_0_b'],
+                     'colors':   ['black', 'red', 'orange'],
+                     'labels':   ['Geo', 'Bern. Wind.', 'exclusive'],
+                     'norm': [True, True, True]
                      }
-        self.vel_inf_dic = {'v_ns': ['vel_inf', 'vel_inf_bern'], # for bern,wind use: vel_inf_bern
-                       'extensions':['_0', '_0_b_w'],     # directories to use (_b or _b_d ... )
-                       'colors':    ['black', 'red'],
-                       'labels':    ['Geo', 'Bern. Wind.'],
-                       'norm': [True, True],
+        self.vel_inf_dic = {
+                       'sims': [sim, sim, sim],
+                       'v_ns': ['vel_inf', 'vel_inf_bern', 'vel_inf_bern'], # for bern,wind use: vel_inf_bern
+                       'extensions':['_0', '_0_b_w', '_0_b'],     # directories to use (_b or _b_d ... )
+                       'colors':    ['black', 'red', 'orange'],
+                       'labels':    ['Geo', 'Bern. Wind.', 'exclusive'],
+                       'norm': [True, True, True],
                        }
-        self.entropy_dic = {'v_ns': ['entropy', 'entropy'],
-                       'extensions':['_0', '_0_b_w'],     # directories to use (_b or _b_d ... )
-                       'colors':    ['black', 'red'],
-                       'labels':    ['Geo', 'Bern. Wind.'],
-                       'norm': [True, True],
+        self.entropy_dic = {
+                       'sims': [sim, sim, sim],
+                       'v_ns': ['entropy', 'entropy'],
+                       'extensions':['_0', '_0_b_w','_0_b'],     # directories to use (_b or _b_d ... )
+                       'colors':    ['black', 'red', 'orange'],
+                       'labels':    ['Geo', 'Bern. Wind.', 'exclusive'],
+                       'norm': [True, True, True],
                        }
 
     def plot_hist_ye(self, ax):
 
         for i in range(len(self.ye_dic['v_ns'])):
-            hist_cl = SIM_EJ_HIST(self.sim,
+            hist_cl = SIM_EJ_HIST(self.ye_dic['sims'][i],
                                   extension=self.ye_dic['extensions'][i],
                                   norm=self.ye_dic['norm'][i])
 
@@ -731,7 +815,7 @@ class PLOT_HISTS:
 
         dtht = None
         for i in range(len(self.theta_dic['v_ns'])):
-            hist_cl = SIM_EJ_HIST(self.sim, extension=self.theta_dic['extensions'][i],
+            hist_cl = SIM_EJ_HIST(self.ye_dic['sims'][i], extension=self.theta_dic['extensions'][i],
                                   norm=self.theta_dic['norm'][i])
 
             tht, M = hist_cl.get_hist_s_M(self.theta_dic['v_ns'][i], self.set_use_norm)
@@ -754,7 +838,7 @@ class PLOT_HISTS:
 
         s_ = []
         for i in range(len(self.entropy_dic['v_ns'])):
-            hist_cl = SIM_EJ_HIST(self.sim, extension=self.entropy_dic['extensions'][i],
+            hist_cl = SIM_EJ_HIST(self.ye_dic['sims'][i], extension=self.entropy_dic['extensions'][i],
                                   norm=self.entropy_dic['norm'][i])
 
             s_, M_ = hist_cl.get_hist_s_M(self.entropy_dic['v_ns'][i], self.set_use_norm)
@@ -775,7 +859,7 @@ class PLOT_HISTS:
     def plot_hist_vel_inf(self, ax):
 
         for i in range(len(self.vel_inf_dic['v_ns'])):
-            hist_cl = SIM_EJ_HIST(self.sim, extension=self.vel_inf_dic['extensions'][i],
+            hist_cl = SIM_EJ_HIST(self.ye_dic['sims'][i], extension=self.vel_inf_dic['extensions'][i],
                                   norm=self.vel_inf_dic['norm'][i])
 
             vel, M = hist_cl.get_hist_s_M(self.vel_inf_dic['v_ns'][i], self.set_use_norm)
@@ -789,15 +873,17 @@ class PLOT_HISTS:
         ax.set_xlabel(r"$\upsilon_{\infty}$ [c]")
 
 
-    def plot_for_one_sim(self, tasks=[], out_figname='tst_hists'):
+    def plot_for_hists(self, tasks=[]):
 
-        basic_size = [4, 2]
+        # basic_size = [4, 2]
         rows = 1
         cols = len(tasks)
         f, (ax_list) = plt.subplots(rows, cols, sharex=False, sharey=False,
-                                    figsize=[basic_size[0] * 1 * len(tasks),  # x <-->
-                                             basic_size[1] * 1])
-        sim = self.sim
+                                    figsize=self.gen_set["figsize"])
+                                    # figsize=[basic_size[0] * 1 * len(tasks),  # x <-->
+                                    #          basic_size[1] * 1])
+
+        # sim = self.sim
 
         for i, task in enumerate(tasks):
             ax = ax_list[i]
@@ -811,8 +897,8 @@ class PLOT_HISTS:
                            tick2On=True, labelsize=11, direction='in')  # labeltop
 
             if i == 0:
-                ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.05), fancybox=False, shadow=False,
-                          ncol=2,
+                ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.02), fancybox=False, shadow=False,
+                          ncol=3,
                           fontsize=8)
                 ax.set_ylabel(r"$M/M_{\mathrm{ej}}$")
 
@@ -825,7 +911,10 @@ class PLOT_HISTS:
 
         plt.minorticks_on()
 
-        plt.savefig('{}{}.png'.format(self.gen_set["figdir"], out_figname), bbox_inches='tight', dpi=128)
+        if not os.path.exists(self.gen_set["figdir"]):
+            os.makedirs(self.gen_set["figdir"])
+
+        plt.savefig('{}{}.png'.format(self.gen_set["figdir"], self.gen_set["figname"]), bbox_inches='tight', dpi=128)
         plt.close()
 
 class PLOT_CORRS:
@@ -918,12 +1007,6 @@ class PLOT_CORRS:
         arr1 = []
         arr2 = []
         mass_arr = []
-        # arr1.append(0)
-        # arr2.append(0)
-        # mass_arr.append(0)
-
-        # fig = plt.figure()
-        # ax = fig.add_subplot(111)
 
         for i in range(len(dic['v_n1'])):
             corr_cl = SIM_CORR(self.sim, dic['extenstions'][i])
@@ -996,7 +1079,8 @@ class PLOT_CORRS:
 
         plt.subplots_adjust(hspace=0.1)
 
-        # if v_n1 == 'x_arr': plt.xlim(right=90)
+        if not os.path.exists(dic["figdir"]):
+            os.makedirs(dic["figdir"])
 
         plt.savefig('{}{}.png'.format(dic["figdir"], dic['out_name']), bbox_inches='tight', dpi=128)
         plt.close()
@@ -1241,7 +1325,7 @@ class PLOT_EJECTA:
 
     def __init__(self, sim):
 
-        self.sim = sim
+        # self.sim = sim
 
         self.task_dics=[]
 
@@ -1265,14 +1349,17 @@ class PLOT_EJECTA:
         # self.task_dics.append(task_m_unb)
 
         task_m_ej={
-            'sims':     ['DD2_M13641364_M0_SR',
-                         'DD2_M13641364_M0_SR'],
-            'v_n':      ['m_ej', 'm_ej'],
-            'extensions':['_0', '_0_b_w'],
-            'ls':       ['-', '-'],
-            'color':    ['black', 'red'],
-            'label':    ['', ''],
-            'tcoll':    True
+            'sims':     [sim, sim, sim],
+            'v_n':      ['m_ej', 'm_ej', 'm_ej'],
+            'extensions':['_0', '_0_b_w', '_0_b'],
+            'ls':       ['-', '-', '-'],
+            'color':    ['black', 'red', 'orange'],
+            'label':    ['', '', ''],
+            'tcoll':    True,
+            'sim_tcoll': sim,
+            'yscale': None,
+            'ymin': 1e-3,
+            'ymax': None
         }
         self.task_dics.append(task_m_ej)
 
@@ -1287,7 +1374,10 @@ class PLOT_EJECTA:
         # self.task_dics.append(task_m_disk) # Paths.ppr_sims + sim + '/postprocess/', 'figname': 'fluxes.png'
 
         self.gen_set = {'figdir': Paths.ppr_sims + sim + '/res_1d/',
-                        'figname': 'fluxes'}
+                        'figname': 'fluxes',
+                        'legend_loc': 'lower right',
+                        'legend_box': (0.5, 0.85),
+                        'legend_ncols': 2}
 
         # self.figname = 'fluxes_DD2'
 
@@ -1371,44 +1461,57 @@ class PLOT_EJECTA:
 
         if task_dic['v_n'][0] == 'm_ej':
             if task_dic['tcoll']:
-                unb_cl = SIM_UNBOUND(self.sim)
+                unb_cl = SIM_UNBOUND(task_dic['sim_tcoll'])
                 tcoll, mdisk = unb_cl.tcoll, unb_cl.diskmass_tcol
                 if np.isfinite(tcoll):
                     ax.axvline(x=((tcoll - tmerg) * 1000), linestyle='--', linewidth=0.5, color='black')
 
+            print(tmerg)
+
+                # print(ej_cl.mass_total_flux)
+        if task_dic['v_n'][0] == 'm_ej':
             for i in range(len(task_dic['v_n'])):
-                ej_cl = SIM_EJ_HIST(self.sim, task_dic['extensions'][i], True) # True for norm
-                self.plot_m_ej(ax, ej_cl, tmerg, ls=task_dic['ls'][i], color=task_dic['color'][i],
+                print('plotting sim: {}'.format(task_dic['sims'][i]))
+                ej_cl = SIM_EJ_HIST(task_dic['sims'][i], task_dic['extensions'][i], True)  # True for norm
+                self.plot_m_ej(ax, ej_cl, 0, ls=task_dic['ls'][i], color=task_dic['color'][i],
                                label=task_dic['label'][i])
 
         if task_dic['v_n'][0] == 'm_unb':
             for i in range(len(task_dic['v_n'])):
-                unb_cl = SIM_UNBOUND(self.sim)
+                unb_cl = SIM_UNBOUND(task_dic['sims'][i])
                 self.plot_m_unb(ax, unb_cl, task_dic["criteria"][i], tmerg, task_dic["ls"][i],
                                 task_dic["color"][i], task_dic["label"][i])
 
         if task_dic['v_n'][0] == 'm_disk':
             for i in range(len(task_dic['v_n'])):
-                disk_cl = SIM_DISK(self.sim)
+                disk_cl = SIM_DISK(task_dic['sims'][i])
                 self.plot_m_disk(ax, disk_cl, tmerg, task_dic["ls"][i],
                                  task_dic["color"][i], task_dic["label"][i])
 
         if task_dic['v_n'][0] == 'm_disk':
             for i in range(len(task_dic['v_n'])):
-                unb_cl = SIM_UNBOUND(self.sim)
+                unb_cl = SIM_UNBOUND(task_dic['sims'][i])
                 self.plot_m_disk_tcoll(ax, unb_cl, tmerg)
 
         if task_dic['v_n'][0] == 'm_tot':
             for i in range(len(task_dic['v_n'])):
-                unb_cl = SIM_UNBOUND(self.sim)
+                unb_cl = SIM_UNBOUND(task_dic['sims'][i])
                 self.plot_m_tot(ax, unb_cl, tmerg, task_dic["ls"][i], task_dic["color"][i], task_dic["label"][i])
 
         if task_dic['v_n'][0] == 'gw':
             for i in range(len(task_dic['v_n'])):
-                gw_cl = SIM_GW(self.sim)
+                gw_cl = SIM_GW(task_dic['sims'][i])
                 self.plot_gw(ax, gw_cl, task_dic["ls"][i], task_dic["color"][i], task_dic["label"][i])
 
-    def plot_from_dic_fro_1sim(self):
+        if task_dic['yscale'] == 'log':
+            ax.set_yscale("log")
+        if task_dic["ymin"] != None:
+            ax.set_ylim(ymin=task_dic["ymin"])
+        if task_dic["ymax"] != None:
+            ax.set_ymax(ymin=task_dic["ymax"])
+
+
+    def plot_from_task_dics(self):
 
         rows = len(self.task_dics)
         cols = 1
@@ -1416,23 +1519,24 @@ class PLOT_EJECTA:
         f, (ax_list) = plt.subplots(rows, cols, sharex=True, sharey=False, figsize=(4.5, 3.6)) # 2.5 *
         # figsize=[len(sims) * len(tasks), 2 * len(tasks)])
 
-        try:
-            gw_cl = SIM_GW(self.sim)
-            tmerg = gw_cl.load_tmerg()
-        except:
-            tmerg = 0
-            print("Warning: Failed lpading the GW (tmerger) -> time 0 is a beginning of simulation")
+        # gw_cl = SIM_GW(self.sim)
+        # tmerg = gw_cl.load_tmerg()
+        # if np.isnan(tmerg):
+        #     print("Warning: Failed lpading the GW (tmerger) -> time 0 is a beginning of simulation")
+
+        tmerg = 0
 
         if rows == 1:
             ax_list = [ax_list]
 
-
-
         for ax, task_dic in zip(ax_list, self.task_dics):
             self.plot_task(ax, task_dic, tmerg)
             if ax == ax_list[0]:
-                ax.legend(loc='lower left', bbox_to_anchor=(0.5, 0.85), fancybox=False, shadow=False,
-                                  ncol=2, fontsize=8)
+                ax.legend(loc=self.gen_set["legend_loc"],
+                          # bbox_to_anchor=self.gen_set["legend_box"],
+                          fancybox=False, shadow=False,
+                          ncol=self.gen_set["legend_ncols"], fontsize=8)
+
             if ax == ax_list[-1]:
                 if tmerg > 0: ax.set_xlabel(r'$t-t_{merg}$ [ms]', fontsize=12)
                 else: ax.set_xlabel(r'$t$ [ms]', fontsize=12)
@@ -1450,21 +1554,365 @@ class PLOT_EJECTA:
         plt.tick_params(axis='both', which='both', labelleft=True, labelright=False, tick1On=True, tick2On=True,
                         labelsize=12, direction='in')  # labeltop
         plt.minorticks_on()
+
+        if not os.path.exists(self.gen_set["figdir"]):
+            os.makedirs(self.gen_set["figdir"])
+
         plt.savefig('{}{}.png'.format(self.gen_set["figdir"], self.gen_set["figname"]), bbox_inches='tight', dpi=128)
         plt.close()
 
+
+''' TASK SPECIFIC FUNCTIONS '''
+
+def plot_DD2_M13641364_M0_LK_resolution_comparison_ejecta():
+
+    fluxs = PLOT_EJECTA('-')
+
+    fluxs.gen_set = {'figdir': Paths.plots + 'comparison_ejecta' + '/',
+                     'figname': 'DD2_M13641364_M0_LK_R04_fluxes_convergence',
+                     'legend_loc': 'upper left',
+                     'legend_box': (0.5, 0.85),
+                     'legend_ncols': 3}
+    task_dics = []
+
+    task_m_ej = {
+        'sims': ["DD2_M13641364_M0_LK_SR_R04", "DD2_M13641364_M0_LK_SR_R04", "DD2_M13641364_M0_LK_SR_R04",
+                 "DD2_M13641364_M0_LK_LR_R04", "DD2_M13641364_M0_LK_LR_R04", "DD2_M13641364_M0_LK_LR_R04",
+                 "DD2_M13641364_M0_LK_HR_R04", "DD2_M13641364_M0_LK_HR_R04", "DD2_M13641364_M0_LK_HR_R04"],
+        'v_n': ['m_ej', 'm_ej', 'm_ej',
+                'm_ej', 'm_ej', 'm_ej',
+                'm_ej', 'm_ej', 'm_ej'],
+        'extensions': ['_0', '_0_b_w', '_0_b',
+                       '_0', '_0_b_w', '_0_b',
+                       '_0', '_0_b_w', '_0_b'],
+        'ls': ['-', '-.', '--',
+               '-', '-.', '--',
+               '-', '-.', '--'],
+        'color': ['black', 'black', 'black',
+                  'red', 'red', 'red',
+                  'blue', 'blue', 'blue'],
+        'label': ['SR G', 'SR B W', 'SR B',
+                  'LR G', 'LR B W', 'LR B',
+                  'HR G', 'HR B W', 'HR B'],
+        'tcoll': False,
+        'sim_tcoll': None,
+        'yscale': '',
+        'ymin': 1e-3,
+        'ymax': None
+    }
+    task_dics.append(task_m_ej)
+    fluxs.task_dics = task_dics
+
+    fluxs.plot_from_task_dics()
+
+def plot_DD2_M13641364_M0_LK_resolution_comparison_hists():
+
+    hists = PLOT_HISTS('-')
+
+    hists.gen_set = {'figdir': Paths.plots + 'comparison_hists' + '/',
+                     'figname': 'DD2_M13641364_M0_LK_R04_convergance_hists',
+                     'figsize':[9, 3.2],
+                     'legend_loc': 'lower right',
+                     'legend_box': (0.5, 0.85)}
+
+    hists.ye_dic = {
+        'sims': ["DD2_M13641364_M0_LK_SR_R04",
+                 "DD2_M13641364_M0_LK_LR_R04",
+                 "DD2_M13641364_M0_LK_HR_R04"],
+        'v_ns': ['ye', 'ye', 'ye'],  # var names to load the files
+        'extensions': ['_0_b_w', '_0_b_w', '_0_b_w'],  # directories to use (_b or _b_d ... )
+        'colors': ['black', 'red', 'blue'],  # colors for plotting
+        'labels': ['SR', 'LR', 'HR'],  # labels to put
+        'norm': [True, True, True]
+    }
+    hists.theta_dic = {
+        'sims': ["DD2_M13641364_M0_LK_SR_R04",
+                 "DD2_M13641364_M0_LK_LR_R04",
+                 "DD2_M13641364_M0_LK_HR_R04"],
+        'v_ns': ['theta', 'theta', 'theta'],
+        'extensions': ['_0_b_w', '_0_b_w', '_0_b_w'],
+        'colors': ['black', 'red', 'blue'],
+        'labels': ['SR', 'LR', 'HR'],
+        'norm': [True, True, True]
+    }
+    hists.vel_inf_dic = {
+        'sims': ["DD2_M13641364_M0_LK_SR_R04",
+                 "DD2_M13641364_M0_LK_LR_R04",
+                 "DD2_M13641364_M0_LK_HR_R04"],
+        'v_ns': ['vel_inf_bern', 'vel_inf_bern', 'vel_inf_bern'],  # for bern,wind use: vel_inf_bern
+        'extensions': ['_0_b_w', '_0_b_w', '_0_b_w'],  # directories to use (_b or _b_d ... )
+        'colors': ['black', 'red', 'blue'],
+        'labels': ['SR', 'LR', 'HR'],
+        'norm': [True, True, True],
+    }
+
+
+    hists.plot_for_hists(['theta', 'vel_inf', 'ye'])
+
+def plot_DD2_M13641364_M0_SR_effect_of_LK_ejecta():
+
+    fluxs = PLOT_EJECTA('-')
+
+    fluxs.gen_set = {'figdir': Paths.plots + 'comparison_ejecta' + '/',
+                     'figname': 'DD2_M13641364_M0_SR_R04_comparison_LK_fluxes_log',
+                     'legend_loc': 'lower right',
+                     'legend_box': (0.5, 0.85),
+                     'legend_ncols': 2}
+    task_dics = []
+
+    task_m_ej = {
+
+        'sims': ["DD2_M13641364_M0_SR_R04", "DD2_M13641364_M0_SR_R04", "DD2_M13641364_M0_SR_R04",
+                 "DD2_M13641364_M0_LK_SR_R04", "DD2_M13641364_M0_LK_SR_R04", "DD2_M13641364_M0_LK_SR_R04"],
+        'v_n': ['m_ej', 'm_ej', 'm_ej',
+                'm_ej', 'm_ej', 'm_ej'],
+        'extensions': ['_0', '_0_b_w', '_0_b',
+                       '_0', '_0_b_w', '_0_b'],
+        'ls': ['-', '-.', '--',
+               '-', '-.', '--'],
+        'color': ['black', 'black', 'black',
+                  'red', 'red', 'red'],
+        'label': ['no LK G', 'no LK B W', 'no LK B',
+                  'LK G', 'LK B W', 'LK B'],
+        'tcoll': False,
+        'sim_tcoll': None,
+        'yscale': 'log',
+        'ymin': 1e-3,
+        'ymax': None
+    }
+    task_dics.append(task_m_ej)
+    fluxs.task_dics = task_dics
+
+    fluxs.plot_from_task_dics()
+
+def plot_DD2_M13641364_M0_SR_effect_of_LK_hists():
+
+    hists = PLOT_HISTS('-')
+
+    hists.gen_set = {'figdir': Paths.plots + 'comparison_hists' + '/',
+                     'figname': 'DD2_M13641364_M0_SR_R04_effect_of_LK_hists_B',
+                     'figsize': [9, 3.2],
+                     'legend_loc': 'lower right',
+                     'legend_box': (0.5, 0.85)}
+
+    hists.ye_dic = {
+        'sims': ["DD2_M13641364_M0_SR_R04",
+                 "DD2_M13641364_M0_LK_LR_R04"],
+        'v_ns': ['ye', 'ye'],  # var names to load the files
+        'extensions': ['_0_b', '_0_b'],  # directories to use (_b or _b_d ... )
+        'colors': ['black', 'red'],  # colors for plotting
+        'labels': ['no LK', 'LK'],  # labels to put
+        'norm': [True, True, True]
+    }
+    hists.theta_dic = {
+        'sims': ["DD2_M13641364_M0_LK_SR_R04",
+                 "DD2_M13641364_M0_LK_LR_R04"],
+        'v_ns': ['theta', 'theta'],
+        'extensions': ['_0_b', '_0_b'],
+        'colors': ['black', 'red'],
+        'labels': ['no LK', 'LK'],
+        'norm': [True, True, True]
+    }
+    hists.vel_inf_dic = {
+        'sims': ["DD2_M13641364_M0_LK_SR_R04",
+                 "DD2_M13641364_M0_LK_LR_R04"],
+        'v_ns': ['vel_inf_bern', 'vel_inf_bern'],  # for bern,wind use: vel_inf_bern
+        'extensions': ['_0_b', '_0_b',],  # directories to use (_b or _b_d ... )
+        'colors': ['black', 'red'],
+        'labels': ['no LK', 'LK'],
+        'norm': [True, True, True],
+    }
+
+    hists.plot_for_hists(['theta', 'vel_inf', 'ye'])
+
+
+def plot_LS220_M13641364_M0_SR_effect_of_LK_ejecta():
+
+    fluxs = PLOT_EJECTA('-')
+
+    fluxs.gen_set = {'figdir': Paths.plots + 'comparison_ejecta' + '/',
+                     'figname': 'LS220_M13641364_M0_SR_R04_comparison_LK_fluxes_log',
+                     'legend_loc': 'upper left',
+                     'legend_box': (0.5, 0.85),
+                     'legend_ncols': 2}
+    task_dics = []
+
+    task_m_ej = {
+
+        'sims': ["LS220_M13641364_M0_SR", "LS220_M13641364_M0_SR", "LS220_M13641364_M0_SR",
+                 "LS220_M13641364_M0_LK_SR", "LS220_M13641364_M0_LK_SR", "LS220_M13641364_M0_LK_SR"],
+        'v_n': ['m_ej', 'm_ej', 'm_ej',
+                'm_ej', 'm_ej', 'm_ej'],
+        'extensions': ['_0', '_0_b_w', '_0_b',
+                       '_0', '_0_b_w', '_0_b'],
+        'ls': ['-', '-.', '--',
+               '-', '-.', '--'],
+        'color': ['black', 'black', 'black',
+                  'red', 'red', 'red'],
+        'label': ['no LK G', 'no LK B W', 'no LK B',
+                  'LK G', 'LK B W', 'LK B'],
+        'tcoll': False,
+        'sim_tcoll': None,
+        'yscale': 'log',
+        'ymin': 1e-3,
+        'ymax': None
+    }
+    task_dics.append(task_m_ej)
+    fluxs.task_dics = task_dics
+
+    fluxs.plot_from_task_dics()
+
+def plot_LS220_M13641364_M0_SR_effect_of_LK_hists():
+
+    hists = PLOT_HISTS('-')
+
+    hists.gen_set = {'figdir': Paths.plots + 'comparison_hists' + '/',
+                     'figname': 'LS220_M13641364_M0_SR_effect_of_LK_hists_B',
+                     'figsize': [9, 3.2],
+                     'legend_loc': 'lower right',
+                     'legend_box': (0.5, 0.85),
+                     'legend_ncols': 2}
+
+    _0_b = "_0_b"
+
+    hists.ye_dic = {
+        'sims': ["LS220_M13641364_M0_SR",
+                 "LS220_M13641364_M0_LK_SR"],
+        'v_ns': ['ye', 'ye'],  # var names to load the files
+        'extensions': [_0_b, _0_b],  # directories to use (_b or _b_d ... )
+        'colors': ['black', 'red'],  # colors for plotting
+        'labels': ['no LK', 'LK'],  # labels to put
+        'norm': [True, True, True]
+    }
+    hists.theta_dic = {
+        'sims': ["LS220_M13641364_M0_SR",
+                 "LS220_M13641364_M0_LK_SR"],
+        'v_ns': ['theta', 'theta'],
+        'extensions': [_0_b, _0_b],
+        'colors': ['black', 'red'],
+        'labels': ['no LK', 'LK'],
+        'norm': [True, True, True]
+    }
+    hists.vel_inf_dic = {
+        'sims': ["LS220_M13641364_M0_SR",
+                 "LS220_M13641364_M0_LK_SR"],
+        'v_ns': ['vel_inf_bern', 'vel_inf_bern'],  # for bern,wind use: vel_inf_bern
+        'extensions': [_0_b, _0_b],  # directories to use (_b or _b_d ... )
+        'colors': ['black', 'red'],
+        'labels': ['no LK', 'LK'],
+        'norm': [True, True, True],
+    }
+
+    hists.plot_for_hists(['theta', 'vel_inf', 'ye'])
+
+def plot_LS220_M13641364_M0_resolution_comparison_ejecta():
+
+    fluxs = PLOT_EJECTA('-')
+
+    fluxs.gen_set = {'figdir': Paths.plots + 'comparison_ejecta' + '/',
+                     'figname': 'LS220_M13641364_M0_fluxes_convergence',
+                     'legend_loc': 'upper left',
+                     'legend_box': (0.5, 0.85),
+                     'legend_ncols': 3}
+    task_dics = []
+
+    task_m_ej = {
+        'sims': ["LS220_M13641364_M0_SR", "LS220_M13641364_M0_SR", "LS220_M13641364_M0_SR",
+                 "LS220_M13641364_M0_LR", "LS220_M13641364_M0_LR", "LS220_M13641364_M0_LR",
+                 "LS220_M13641364_M0_HR", "LS220_M13641364_M0_HR", "LS220_M13641364_M0_HR"],
+        'v_n': ['m_ej', 'm_ej', 'm_ej',
+                'm_ej', 'm_ej', 'm_ej',
+                'm_ej', 'm_ej', 'm_ej'],
+        'extensions': ['_0', '_0_b_w', '_0_b',
+                       '_0', '_0_b_w', '_0_b',
+                       '_0', '_0_b_w', '_0_b'],
+        'ls': ['-', '-.', '--',
+               '-', '-.', '--',
+               '-', '-.', '--'],
+        'color': ['black', 'black', 'black',
+                  'red', 'red', 'red',
+                  'blue', 'blue', 'blue'],
+        'label': ['SR G', 'SR B W', 'SR B',
+                  'LR G', 'LR B W', 'LR B',
+                  'HR G', 'HR B W', 'HR B'],
+        'tcoll': False,
+        'sim_tcoll': None,
+        'yscale': '',
+        'ymin': 1e-3,
+        'ymax': None
+    }
+    task_dics.append(task_m_ej)
+    fluxs.task_dics = task_dics
+
+    fluxs.plot_from_task_dics()
+
+def plot_LS220_M13641364_M0_resolution_comparison_hists():
+
+    hists = PLOT_HISTS('-')
+
+    hists.gen_set = {'figdir': Paths.plots + 'comparison_hists' + '/',
+                     'figname': 'LS220_M13641364_M0_convergance_hists_B',
+                     'figsize':[9, 3.2],
+                     'legend_loc': 'lower right',
+                     'legend_box': (0.5, 0.85),
+                     'legend_ncols': 3}
+
+    _b_w = '_0_b'
+
+    hists.ye_dic = {
+        'sims': ["LS220_M13641364_M0_SR",
+                 "LS220_M13641364_M0_LR"],
+        'v_ns': ['ye', 'ye'],  # var names to load the files
+        'extensions': [_b_w, _b_w],  # directories to use (_b or _b_d ... )
+        'colors': ['black', 'red'],  # colors for plotting
+        'labels': ['SR', 'LR'],  # labels to put
+        'norm': [True, True]
+    }
+    hists.theta_dic = {
+        'sims': ["LS220_M13641364_M0_SR",
+                 "LS220_M13641364_M0_LR"],
+        'v_ns': ['theta', 'theta'],
+        'extensions': [_b_w, _b_w],
+        'colors': ['black', 'red'],
+        'labels': ['SR', 'LR'],
+        'norm': [True, True]
+    }
+    hists.vel_inf_dic = {
+        'sims': ["LS220_M13641364_M0_SR",
+                 "LS220_M13641364_M0_LR"],
+        'v_ns': ['vel_inf_bern', 'vel_inf_bern'],  # for bern,wind use: vel_inf_bern
+        'extensions': [_b_w, _b_w],  # directories to use (_b or _b_d ... )
+        'colors': ['black', 'red'],
+        'labels': ['SR', 'LR'],
+        'norm': [True, True],
+    }
+
+
+    hists.plot_for_hists(['theta', 'vel_inf', 'ye'])
+
 if __name__ == '__main__':
+
+    # plot_DD2_M13641364_M0_LK_resolution_comparison_hists(); exit(1)
+    # plot_DD2_M13641364_M0_LK_resolution_comparison_ejecta(); exit(1)
+    # plot_DD2_M13641364_M0_SR_effect_of_LK_ejecta(); exit(1)
+    # plot_DD2_M13641364_M0_SR_effect_of_LK_hists(); exit(1)
+
+
+    # plot_LS220_M13641364_M0_SR_effect_of_LK_ejecta(); exit(1)
+    # plot_LS220_M13641364_M0_SR_effect_of_LK_hists(); exit(1)
+    # plot_LS220_M13641364_M0_resolution_comparison_ejecta(); exit(1)
+    # plot_LS220_M13641364_M0_resolution_comparison_hists(); exit(1)
 
     # TODO For Average you are using only NOT normalized. SO you have to set a choce to get a normalized separately
 
-    sim = "LS220_M13501350_M0_SR"
+    sim = "SFHo_M14521283_M0_LR"
 
     SIM_UNBOUND(sim)
     SIM_DISK(sim)
     SIM_EJ_HIST(sim)
     profs = PLOT_PROFS(sim);  profs.plot_vn1_for_sim('flux')
-    hists = PLOT_HISTS(sim);  hists.plot_for_one_sim(['theta', 'vel_inf', 'ye'])
+    hists = PLOT_HISTS(sim);  hists.plot_for_hists(['theta', 'vel_inf', 'ye'])
     corrs = PLOT_CORRS(sim);  corrs.plot_vn1_vn2_for_sim('theta', 'vel_inf')
     corrs.plot_vn1_vn2_for_sim('theta', 'ye')
-    fluxs = PLOT_EJECTA(sim); fluxs.plot_from_dic_fro_1sim()
+    fluxs = PLOT_EJECTA(sim); fluxs.plot_from_task_dics()
 

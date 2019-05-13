@@ -85,8 +85,9 @@ class LOAD_STORE_DATASETS:
                         'indir': Paths.gw170817 + sim + '/',
                         'outdir': Paths.ppr_sims + sim + '/res_2d/'}
 
-        self.output_it_map = {}
-        self.it_time = self.set_it_output_map()
+        # self.output_it_map = {}
+        self.output_it_map, self.it_time = \
+            set_it_output_map(Paths.gw170817+self.sim+'/')
 
         self.list_v_ns = ['rho', 'Y_e', 'temperature', 's_phi', 'entropy', 'dens_unbnd']
         self.list_planes=['xy', 'xz']
@@ -96,40 +97,43 @@ class LOAD_STORE_DATASETS:
                                   for k in range(len(self.list_planes))]
                                   for s in range(len(self.output_it_map.keys()))]
 
-    def set_it_output_map(self):
-        """
-        Loads set of files that have '1:it 2:time ...' structure to get a map
-        of what output-xxxx contains what iteration (and time)
-        """
-        print('-' * 25 + 'LOADING it list ({})'
-              .format(self.gen_set['file_for_it']) + '-' * 25)
-        print("\t loading from: {}".format(self.gen_set['indir']))
-        files = locate(self.gen_set['file_for_it'], root=self.gen_set["indir"], followlinks=True)
-        # remove folders like 'collated'
-        selected = []
-        for file in files:
-            if file.__contains__('output-'):
-                selected.append(file)
-        # for overall count of number of iterations and files
-        it_time = np.zeros(2)
-        for file in selected:
-            o_name = file.split('/')
-            o_dir = ''
-            for o_part in o_name:
-                if o_part.__contains__('output-'):
-                    o_dir = o_part
-            if o_dir == '':
-                raise NameError("Did not find output-xxxx in {}".format(o_name))
-            it_time_i = np.loadtxt(file, usecols=(0,1))
-            self.output_it_map[o_dir] = it_time_i
-            it_time = np.vstack((it_time, it_time_i))
-        it_time = np.delete(it_time, 0, 0)
-        print('outputs:{} iterations:{} [{}->{}]'.format(len(selected),
-                                                         len(it_time[:,0]),
-                                                         int(it_time[:,0].min()),
-                                                         int(it_time[:,0].max())))
-        print('-' * 30 + '------DONE-----' + '-' * 30)
-        return it_time
+    # def set_it_output_map(self):
+    #     """
+    #     Loads set of files that have '1:it 2:time ...' structure to get a map
+    #     of what output-xxxx contains what iteration (and time)
+    #     """
+    #     print('-' * 25 + 'LOADING it list ({})'
+    #           .format(self.gen_set['file_for_it']) + '-' * 25)
+    #     print("\t loading from: {}".format(self.gen_set['indir']))
+    #     files = locate(self.gen_set['file_for_it'], root=self.gen_set["indir"], followlinks=True)
+    #     # remove folders like 'collated'
+    #     selected = []
+    #     for file in files:
+    #         if file.__contains__('output-'):
+    #             selected.append(file)
+    #     # for overall count of number of iterations and files
+    #     it_time = np.zeros(2)
+    #     for file in selected:
+    #         o_name = file.split('/')
+    #         o_dir = ''
+    #         for o_part in o_name:
+    #             if o_part.__contains__('output-'):
+    #                 o_dir = o_part
+    #         if o_dir == '':
+    #             raise NameError("Did not find output-xxxx in {}".format(o_name))
+    #         it_time_i = np.loadtxt(file, usecols=(0,1))
+    #         self.output_it_map[o_dir] = it_time_i
+    #         it_time = np.vstack((it_time, it_time_i))
+    #     it_time = np.delete(it_time, 0, 0)
+    #     print('outputs:{} iterations:{} [{}->{}]'.format(len(selected),
+    #                                                      len(it_time[:,0]),
+    #                                                      int(it_time[:,0].min()),
+    #                                                      int(it_time[:,0].max())))
+    #     print('-' * 30 + '------DONE-----' + '-' * 30)
+    #
+    #     self.output_it_map, it_time = set_it_output_map(Paths.gw170817+self.sim+'/')
+    #
+    #     return it_time
 
     def check_v_n(self, v_n):
         if v_n not in self.list_v_ns:
@@ -149,12 +153,13 @@ class LOAD_STORE_DATASETS:
 
     def load_dataset(self, o_dir, plane, v_n):
         fname = v_n + '.' + plane + '.h5'
-        files = locate(fname, root=self.gen_set['indir'] + o_dir +'/', followlinks=True)
+        files = locate(fname, root=self.gen_set['indir'] + o_dir +'/', followlinks=False)
         print("\t Loading: {} plane:{} v_n:{} dataset"
               .format(o_dir, plane, v_n))
         if len(files) > 1:
             raise ValueError("More than 1 file ({}) found. \nFile:{} location:{}"
-                             .format(len(files), fname, o_dir))
+                             "\nFiles: {}"
+                             .format(len(files), fname, o_dir, files))
         if len(files) == 0:
             raise ValueError("NO fils found. \nlocation:{}"
                              .format(fname, o_dir))
@@ -554,7 +559,7 @@ class INTERPOLATE_STORE(EXTRACT_STORE_DATA):
                         'file_for_it': 'H.norm2.asc',
                         'iterations':0,
                         'indir': Paths.gw170817 + sim + '/',
-                        'outdir': Paths.ppr_sims + sim + '/2d/',
+                        'outdir': Paths.ppr_sims + sim + '/res_2d/',
                         }
         self.grid_set = {'type': 'cylindrical', 'n_r': 150, 'n_phi': 150, 'n_z': -100}
 
@@ -702,10 +707,6 @@ class PLOT_MANY:
             'cmap': 'RdBu_r', 'norm': 'log', 'todo': None
         }
         # self.set_plot_dics.append(plot_dic2)
-
-
-
-
 
 
     def set_ncols_nrows(self):
@@ -931,7 +932,7 @@ class PLOT_MANY:
 
             cax1 = self.fig.add_axes(pos2)
             if location == 'right':
-                cbar = plt.colorbar(im, cax=cax1, extend='both', format='%.1e')
+                cbar = plt.colorbar(im, cax=cax1, extend='both')#, format='%.1e')
             elif location == 'left':
                 cbar = plt.colorbar(im, cax=cax1, extend='both', format='%.1e')
                 cax1.yaxis.set_ticks_position('left')
@@ -2533,7 +2534,7 @@ def task_movie2():
 
     pl_.gen_set = {
         "figdir": int_.gen_set["outdir"] + 'movie/',
-        "figname": "tst.png",
+        "figname": "_tst.png",
         "figsize": (3.5, 3.8),
         "type": "polar",
         "subplots_adjust_h": 0.2,
@@ -2589,62 +2590,128 @@ def task_movie2():
             Printcolor.yellow("Warning. it:{} failed with ValueError".format(it))
 
 
-def task_plot_many():
+def task_plot_many(sim):
 
-    int_ = INTERPOLATE_STORE("LS220_M13641364_M0_SR")
+    int_ = INTERPOLATE_STORE(sim)
     pl_ = PLOT_MANY(int_)
 
     pl_.gen_set = {
-        "figdir": int_.gen_set["outdir"],
-        "figname": "tst.png",
-        "figsize": (5.5, 5.5),
+        "figdir": int_.gen_set["outdir"], # ppr_sim + /sim/ + res_2d/
+        "figname": "temps4.png",
+        "figsize": (8.5, 2.5), # <-> | # for 4 in the row
+        # "figsize": (5.5, 5.5),  # <-> |
         "type": "polar",
-        "subplots_adjust_h": 0.2,
+        "subplots_adjust_h": 1.2,
         "subplots_adjust_w": 0.2
     }
     # RdBu_r
     plot_dic1 = {
         'position': (1, 1), 'title': 'time [ms]', 'cbar': 'left .15 .0',
-        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'rho',
+        'it': 700416, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'rho',
         'vmin': 1e-6, 'vmax': 5e-6, 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
         'cmap': 'inferno', 'norm': 'log', 'todo': None
     }
-    pl_.set_plot_dics.append(plot_dic1)
+    # pl_.set_plot_dics.append(plot_dic1)
 
     plot_dic2 = {
         'position': (1, 2), 'title': 'it', 'cbar': 'right .05 .0',
-        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'Y_e',
+        'it': 700416, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'Y_e',
         'vmin': 0.05, 'vmax': 0.45, 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
         'cmap': 'inferno', 'norm': 'log', 'todo': None
     }
-    pl_.set_plot_dics.append(plot_dic2)
+    # pl_.set_plot_dics.append(plot_dic2)
 
     plot_dic2 = {
         'position': (2, 1), 'title': None, 'cbar': 'left .15 .0',
-        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'temperature',
+        'it': 700416, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'temperature',
+        'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    # pl_.set_plot_dics.append(plot_dic2)
+
+    plot_dic2 = {
+        'position': (2, 2), 'title': None, 'cbar': 'right .05 .0',
+        'it': 700416, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'entropy',
+        'vmin': 0, 'vmax': 30, 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    # pl_.set_plot_dics.append(plot_dic2)
+
+    '''4 temperatures'''
+    plot_dic2 = {
+        'position': (1, 1), 'title': 'time [ms]', 'cbar': None,#'left .15 .0',
+        'it': 432128, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'temperature',
+        'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic2)
+    plot_dic2 = {
+        'position': (1, 2), 'title': 'time [ms]', 'cbar': None,#'left .15 .0',
+        'it': 649216, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'temperature',
+        'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic2)
+    plot_dic2 = {
+        'position': (1, 3), 'title': 'time [ms]', 'cbar': None,#'left .15 .0',
+        'it': 866304, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'temperature',
+        'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
+        'cmap': 'inferno', 'norm': 'log', 'todo': None
+    }
+    pl_.set_plot_dics.append(plot_dic2)
+    plot_dic2 = {
+        'position': (1, 4), 'title': 'time [ms]', 'cbar': 'right .05 .0',
+        'it': 1083392, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'temperature',
         'vmin': 5., 'vmax': 10., 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
         'cmap': 'inferno', 'norm': 'log', 'todo': None
     }
     pl_.set_plot_dics.append(plot_dic2)
 
-    plot_dic2 = {
-        'position': (2, 2), 'title': None, 'cbar': 'right .05 .0',
-        'it': 1003520, 'plane': 'xy', 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'entropy',
-        'vmin': 0, 'vmax': 30, 'rmin': 0., 'rmax': 50., 'mask_below': None, 'mask_above': None,
-        'cmap': 'inferno', 'norm': 'log', 'todo': None
-    }
-    pl_.set_plot_dics.append(plot_dic2)
+
 
     pl_.main()
 
+def get_nearest_iterations_for_times(sim, required_times, file_for_it="dens.norm1.asc"):
+
+    _, it_time = set_it_output_map(Paths.gw170817 + sim + '/', file_for_it)
+
+    it_time[:, 1] *= 0.004925794970773136 * 1e-3  # time is seconds
+
+    print("\n")
+    print("    < tmin: {:.3f} tmax: {:.3f} ({}) >".format(it_time[:, 1].min(), it_time[:, 1].max(),
+                                                          file_for_it))
+    print("    --------------- TASK -------------------")
+    print("    t_req  |  t_aval  |  it       ")
+    for required_time in required_times:
+
+        if required_time > it_time[:, 1].max():
+            raise ValueError("time {:.3f}s beyond the simulation length ({:.3f}s)".format(required_time, it_time[:, 1].max()))
+        if required_time < it_time[:, 1].min():
+            raise ValueError("time {:.3f}s is too small, minimum is ({:.3f}s)".format(required_time, it_time[:, 1].min()))
+
+        closest_iteration = int(it_time[find_nearest_index(it_time[:, 1], required_time), 0])
+        closest_time = it_time[find_nearest_index(it_time[:, 1], required_time), 1]
+
+        print("    {:.3f}  |  {:.3f}   |  {}  ".format(required_time, closest_time, closest_iteration))
+    print("    --------------- DONE -------------------")
+    print("\n")
+
+
 if __name__ == '__main__':
+
+    sim = "LS220_M13641364_M0_SR"
+
+    ''' --- ITERATION FINDER --- '''
+    # finds interations for given times (s) in the default files, like dens.norm1.asc
+    get_nearest_iterations_for_times(sim, [0.020, 0.030, 0.040, 0.050])
+    # exit(1)
 
     ''' --- MOVIE --- '''
     # task_movie1() # for 1 plot of temperature
-    task_movie2() # 4 plots with rho, temp, ye, entropy
+    # task_movie2() # 4 plots with rho, temp, ye, entropy
 
     ''' --- PLOT XY PROJECIONS OF MULTIPLE ITERATIONS --- '''
-    # task_plot_many()
+    task_plot_many(sim)
 
     ''' --- COMPUTE rho MODES --- '''
     # int_ = INTERPOLATE_STORE('DD2_M13641364_M0_SR')

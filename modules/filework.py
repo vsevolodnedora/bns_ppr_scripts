@@ -37,10 +37,15 @@ def get_profiles(sim, time_list = [], it_list = [], n_more=0,
 
     if len(time_list) > 0 and len(it_list) > 0: raise NameError("Only time_list or it_list can be specified")
 
-    files = sorted(glob(Paths.ppr_sims + sim + "/" + add_path + "*{}".format(ftype)),
+    # locating all profiles available
+    files = sorted(glob(Paths.gw170817 + sim + "/" + add_path + "*{}".format(ftype)),
                    key=lambda x: int(x.split('/')[-1].replace("{}".format(ftype), "")))
+    if len(files) == 0:
+        raise ValueError("Failed to fild profiles in {}".format(Paths.gw170817 + sim + "/" + add_path))
     iterations = [int(it.split('/')[-1].replace("{}".format(ftype), "")) for it in files]
-    get_times = interpoate_time_form_it(iterations, Paths.ppr_sims + sim + '/' + Files.it_time, time_units)
+    if len(iterations) == 0:
+        raise ValueError("Failed to extract iterations from files")
+    get_times = interpoate_time_form_it(iterations, Paths.gw170817 + sim + '/', time_units)
 
     print('|------------------------------------------------------------------------|')
     print("ALL TIMES: \n{}".format(get_times))
@@ -53,7 +58,7 @@ def get_profiles(sim, time_list = [], it_list = [], n_more=0,
 
     # if times to find are given, but not iterations, - compute iterations for those times and find files
     elif any(time_list) and not any(it_list):
-        get_iterations = interpoate_it_form_time(time_list, Paths.ppr_sims + sim + '/' + Files.it_time, time_units)
+        get_iterations = interpoate_it_form_time(time_list, Paths.gw170817 + sim + '/', time_units)
 
     # if times are not given, but iterations to use are, - compute times for those iterations
     elif not any(time_list) and any(it_list):
@@ -93,6 +98,9 @@ def get_profiles(sim, time_list = [], it_list = [], n_more=0,
                 files_of_available_iterations.append(fname)
 
     available_times = interpoate_time_form_it(available_iterations,
-                                              Paths.ppr_sims + sim + '/' + Files.it_time, time_units)
+                                              Paths.gw170817 + sim + '/', time_units)
+
+    print("\t available times:      {}".format(available_times))
+    print("\t available iterations: {}".format(available_iterations))
 
     return available_times, files_of_available_iterations

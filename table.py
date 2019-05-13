@@ -365,16 +365,15 @@ def fill_jgw_egw(tmrgr_dic):
             run['JGW'] = 'nan'
 
 # Ejecta & Disk
-
+from outflowed import SIM_EJ_HIST
 def fill_ej_times(tmrgr_dics, extension='_0'):
-    from outflowed import SIM_EJ_HIST
+
 
     for run, tmrgr_dic in zip(table, tmrgr_dics):
 
         try:
             ej = SIM_EJ_HIST(run["name"], extension, True) # geodesic, at det.0 by default
             run['Mej']      = ej.get_par('Mej_tot')
-            run["dMej"]     = ej.get_par('dMej_tot')
             run['ThetaRMS'] = ej.get_par('theta_rms')
             run['Yeej']     = ej.get_par('Ye')
             run['Sej']      = ej.get_par('s')
@@ -383,6 +382,37 @@ def fill_ej_times(tmrgr_dics, extension='_0'):
             run['tend']     = ej.time_total_flux[-1]
         except IOError:
             Printcolor.yellow("Warning: Ej IOError for {}".format(run["name"]))
+
+def fill_ej_times_bern(tmrgr_dics, extension='_0_b'):
+
+
+    for run, tmrgr_dic in zip(table, tmrgr_dics):
+
+        try:
+            ej = SIM_EJ_HIST(run["name"], extension, True) # geodesic, at det.0 by default
+            run['Mej_bern']      = ej.get_par('Mej_tot')
+            run['ThetaRMS_bern'] = ej.get_par('theta_rms')
+            run['Yeej_bern']     = ej.get_par('Ye')
+            run['Sej_bern']      = ej.get_par('s')
+            run['vej_bern']      = ej.get_par('vel_inf_bern')
+            run['Ekej_bern']     = ej.get_par('E_kin_bern')
+        except IOError:
+            Printcolor.yellow("Warning: Bernoulli Ej IOError for {}".format(run["name"]))
+
+from outflowed import SIM_DISK
+def fill_disk_mass_from_3d():
+
+    for run in table:
+        disk = SIM_DISK(run["name"])
+        try:
+            _, masses = disk.load_disk_mass_ev()
+            if len(masses) > 0:
+                run['Mdisk3D'] = masses[-1]
+        except:
+            Printcolor.yellow("Disk masses were not loaded for {}".format(run["name"]))
+
+
+
 
 def fill_unb_disk_times(tmrgr_dics):
     from outflowed import SIM_UNBOUND, SIM_DISK
@@ -407,9 +437,14 @@ def fill_unb_disk_times(tmrgr_dics):
         except IOError:
             Printcolor.yellow("Warning: Disk evol. IOError for {}".format(run["name"]))
 
+
 if __name__ == '__main__':
-    '''-------------------------------| FILLING DATA FROM SELF NAME |------------------------------'''
+
     load_table(Paths.output + Files.models_empty)
+
+
+    '''-------------------------------| FILLING DATA FROM SELF NAME |------------------------------'''
+
 
     # get sim names from the source dir
     # initial_data = fill_from_source_dir("/data1/numrel/WhiskyTHC/Backup/2018/GW170817/")
@@ -462,7 +497,8 @@ if __name__ == '__main__':
     # load_table('models.csv')
 
     fill_unb_disk_times(dic_tmergs)
-    fill_ej_times(dic_tmergs, extension='_0') # geodesic
-
+    fill_ej_times(dic_tmergs, extension="_0")       # geodesic
+    fill_ej_times_bern(dic_tmergs, extension="_0_b")# bernoulli
+    fill_disk_mass_from_3d()
 
     save_table(Paths.output + Files.models)

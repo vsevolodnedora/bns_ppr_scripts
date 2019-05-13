@@ -287,23 +287,26 @@ class PLOT_MODELS:
 
 
     @staticmethod
-    def plot_one_ejecta_prof(ax, sims, v_n1='tend', v_n2='Mej'):
+    def plot_one_ejecta_prof(ax, sims, v_n1='tend', v_n2='Mej', ext="_0"):
 
         # for isim, sim in sims.iterrows():
         #     ax.plot(sim[v_n1], sim[v_n2], 'x',
         #             color=eos_color(sim["EOS"]))
-
+        if ext in ["_0_b", "_1_b", "_0_b_w", "_1_b_w", "_0_b_d", "_1_b_d"]:
+            v_n2 += "_bern"
         idx = 1
         for isim, sim in sims.iterrows():
 
-            ej = SIM_EJ_HIST(isim)
+            ej = SIM_EJ_HIST(isim, extension=ext, norm=True)
 
             color=get_color_for_q(sim["M1"]/sim["M2"])
+
+            # if ext in ["_0_b", "_1_b", "_0_b_w", "_1_b_w", "_0_b_d", "_1_b_d"]:
+            #     v_n2 += "_bern"
 
             ax.plot(ej.time_total_flux, ej.mass_total_flux, '-', color=color,
                     label=r'${}:{}$'.format(idx, str(isim).replace('_', '\_')))
             if not np.isinf(sim["tcoll"]):
-
                 ax.plot(sim[v_n1], sim[v_n2], 'o', color=color)
 
             # ax.plot(sim[v_n1], sim[v_n2], 'x', color=color)
@@ -312,7 +315,7 @@ class PLOT_MODELS:
 
         ax.legend(fancybox=False, loc='best',shadow=False, fontsize=8)
 
-        unique_eos = get_uniqe_eoss(sims["EOS"])
+        # unique_eos = get_uniqe_eoss(sims["EOS"])
 
         # for eos in unique_eos:
         #     for isim, sim in sims.iterrows():
@@ -341,7 +344,7 @@ class PLOT_MODELS:
 
 
     @staticmethod
-    def plot_vn1_vn2_flux_evolution2():
+    def plot_vn1_vn2_flux_evolution2(extension="_0"):
 
         list_EOSs = ['DD2', 'LS220', 'SLy4', 'SFHo']
         list_of_res=['LR', 'SR', 'HR']
@@ -394,7 +397,7 @@ class PLOT_MODELS:
                               'q': [], 'visc': []}
                 sims = sim_cl.get_selected_models(lim_dic_in)
                 ax = sbplot_matrix[n_col][n_row]
-                PLOT_MODELS.plot_one_ejecta_prof(ax, sims)
+                PLOT_MODELS.plot_one_ejecta_prof(ax, sims, v_n1='tend', v_n2='Mej', ext=extension)
                 # ax.set_xlim(left=1e-2)
                 # ax.set_xscale("log")
                 # ax.set_xlim(left=1e-2,right=5e-1)
@@ -426,7 +429,7 @@ class PLOT_MODELS:
         plt.subplots_adjust(hspace=0.0)
         plt.subplots_adjust(wspace=0.0)
 
-        plt.savefig(Paths.plots + 'flux_evolution.pdf', bbox_inches='tight', dpi=128)
+        plt.savefig(Paths.plots + 'flux_evolution{}.pdf'.format(extension), bbox_inches='tight', dpi=128)
         plt.legend()
         plt.close()
 
@@ -631,8 +634,8 @@ if __name__ == '__main__':
     #
     # sims = sim_cl.get_selected_models(lim_dic_in)
 
-    # PLOT_MODELS.plot_vn1_vn2_flux_evolution2()
-    PLOT_MODELS.plot_final_average(['Lambda'], ['Mej', 'vej']) # 'vej', 'Yeej'
+    PLOT_MODELS.plot_vn1_vn2_flux_evolution2(extension="_0_b")
+    # PLOT_MODELS.plot_final_average(['Lambda'], ['Mej', 'vej']) # 'vej', 'Yeej'
 
 
 

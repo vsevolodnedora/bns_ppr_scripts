@@ -2,6 +2,7 @@
 import numpy as np
 from lists import *
 from units import time_constant
+from glob import glob
 
 class Printcolor:
 
@@ -198,6 +199,34 @@ def find_nearest_index(array, value):
         idx = (np.abs(array - value)).argmin()
         return idx
 
+
+def combine(x, y, xy, corner_val=None):
+    '''creates a 2d array  1st raw    [0, 1:]-- x -- density      (log)
+                           1st column [1:, 0] -- y -- lemperature (log)
+                           Matrix     [1:,1:] -- xy --Opacity     (log)
+       0th element in 1st raw (column) - can be used a corner value
+
+    '''
+    x = np.array(x)
+    y = np.array(y)
+    xy = np.array((xy))
+
+    if len(x) != len(y):
+        print('\t__Warning. x({}) != y({}) (combine)'.format(len(x), len(y)))
+    if len(x) != len(xy[0, :]):
+        raise ValueError('\t__Warning. x({}) != xy[0, :]({}) (combine)'.format(len(x), len(xy[0, :])))
+    if len(y) != len(xy[:, 0]):
+        raise ValueError('\t__Warning. y({}) != xy[:, 0]({}) (combine)'.format(len(y), len(xy[:, 0])))
+
+    res = np.insert(xy, 0, x, axis=0)
+    new_y = np.insert(y, 0, 0, axis=0)  # inserting a 0 to a first column of a
+    res = np.insert(res, 0, new_y, axis=1)
+
+    if corner_val != None:
+        res[0, 0] = corner_val
+
+    return res
+
 def get_uniqe_eoss(eoss):
 
     uinique_eos = []
@@ -256,8 +285,73 @@ def eos_color(eos):
 def get_color_for_q(q):
     return Lists.colors_q[round(q, 3)]
 
+def set_it_output_map(path_to_sim, file_for_it="dens.norm1.asc", clean=True):
+    """
+    Loads set of files that have '1:it 2:time ...' structure to get a map
+    of what output-xxxx contains what iteration (and time)
+    """
 
-def interpoate_time_form_it(it_list, file_it_use, time_units='s'):
+    gen_set = {"indir": path_to_sim,
+               "file_for_it": file_for_it}
+
+    output_it_map = {}
+
+    fpath = gen_set["indir"] + "output-*" + "/data/" + gen_set['file_for_it']
+    files = glob(fpath)
+
+    if not clean:
+        print('-' * 25 + 'LOADING it list ({})'
+              .format(gen_set['file_for_it']) + '-' * 25)
+        print("\t loading from: {}".format(gen_set['indir']))
+
+    if len(files) == 0:
+        raise ValueError("No files found for it_time mapping searched:\n{}"
+                         .format(fpath))
+    if not clean:
+        print("\t   files found: {}".format(len(files)))
+
+
+
+    it_time = np.zeros(2)
+    for file in files:
+        o_name = file.split('/')
+        o_dir = ''
+        for o_part in o_name:
+            if o_part.__contains__('output-'):
+                o_dir = o_part
+        if o_dir == '':
+            raise NameError("Did not find output-xxxx in {}".format(o_name))
+        it_time_i = np.loadtxt(file, usecols=(0, 1))
+        output_it_map[o_dir] = it_time_i
+        it_time = np.vstack((it_time, it_time_i))
+    it_time = np.delete(it_time, 0, 0)
+    if not clean:
+        print('outputs:{} iterations:{} [{}->{}]'.format(len(files),
+                                                         len(it_time[:, 0]),
+                                                         int(it_time[:, 0].min()),
+                                                         int(it_time[:, 0].max())))
+    if len(it_time[:, 0]) != len(set(it_time[:, 0])):
+        if not clean:
+            Printcolor.yellow("Warning: repetitions found in the "
+                              "loaded iterations")
+        iterations = np.unique(it_time[:, 0])
+        timestpes = np.unique(it_time[:, 1])
+        if not len(iterations) == len(timestpes):
+            raise ValueError("Failed attmept to remove repetitions from "
+                             "\t it and time lists. Wrong lengths: {} {}"
+                             .format(len(iterations), len(timestpes)))
+    else:
+        if not clean:
+            Printcolor.blue("No repetitions found in loaded it list")
+        iterations = np.unique(it_time[:, 0])
+        timestpes = np.unique(it_time[:, 1])
+
+    if not clean:
+        print('-' * 30 + '------DONE-----' + '-' * 30)
+
+    return output_it_map, np.vstack((iterations, timestpes)).T
+
+def interpoate_time_form_it(it_list, path, time_units='s', extrapolate=True):
     '''
     From list of iterations, returns a list of timesteps (in seconds)
     '''
@@ -265,18 +359,31 @@ def interpoate_time_form_it(it_list, file_it_use, time_units='s'):
     # start_t = time.time()
     print("\t Interpolating time for interations...")
 
-    path_to_template = file_it_use # "/collated/outflow_det_0.asc"
+    # path_to_template = file_it_use # "/collated/outflow_det_0.asc"
 
-    it_time = np.loadtxt(path_to_template, unpack=False, usecols=[0, 1])  # it t
+    _, it_time = set_it_output_map(path)# np.loadtxt(path_to_template, unpack=False, usecols=[0, 1])  # it t
+
+    if not any(it_list):
+        raise ValueError("Passes empty iteration list")
+    if len(it_time[:,0]) == 0:
+        raise ValueError("Failed to get it_time map")
 
     if np.array(it_list).min() < it_time[:, 0].min():
-        raise ValueError("list it:{} < min it:{} in file: {}"
-                         .format(np.array(it_list).min(), it_time[:, 0].min(), file_it_use))
+        raise ValueError("list it:{} < min it:{} in sim: {}"
+                         .format(np.array(it_list).min(), it_time[:, 0].min(), path))
     if np.array(it_list).max() > it_time[:, 0].max():
-        raise ValueError("list it:{} > max it:{} in file: {}"
-                         .format(np.array(it_list).max(), it_time[:, 0].max(), file_it_use))
+        if extrapolate:
+            Printcolor.yellow("list it:{} > max it:{} in sim: {}"
+                             .format(np.array(it_list).max(), it_time[:, 0].max(), path))
+        else:
+            raise ValueError("list it:{} > max it:{} in sim: {}"
+                             .format(np.array(it_list).max(), it_time[:, 0].max(), path))
 
-    f = interpolate.interp1d(it_time[:, 0], it_time[:, 1], kind='linear')
+    if extrapolate:
+        f = interpolate.interp1d(it_time[:, 0], it_time[:, 1], kind='linear', bounds_error=False,
+                                 fill_value="extrapolate")
+    else:
+        f = interpolate.interp1d(it_time[:, 0], it_time[:, 1], kind='linear')
     time_list = f(it_list)
     if time_units == 's': time_list *= (time_constant * 1e-3)
     elif time_units == 'ms': time_list *= (time_constant)
@@ -287,7 +394,7 @@ def interpoate_time_form_it(it_list, file_it_use, time_units='s'):
 
     return time_list
 
-def interpoate_it_form_time(time_list, file_it_use, time_units='s'):
+def interpoate_it_form_time(time_list, path, time_units='s'):
     '''
     From list of iterations, returns a list of timesteps (in seconds)
     '''
@@ -301,16 +408,16 @@ def interpoate_it_form_time(time_list, file_it_use, time_units='s'):
     elif time_units == 'msol': time_list /= 1.
     else: raise NameError("Time units:{} are not recognized. Useon of [s, ms, msol]")
 
-    path_to_template = file_it_use # "/collated/outflow_det_0.asc"
+    # path_to_template = file_it_use # "/collated/outflow_det_0.asc"
 
-    it_time = np.loadtxt(path_to_template, unpack=False, usecols=[0, 1])  # it t
+    _, it_time = set_it_output_map(path) # np.loadtxt(path_to_template, unpack=False, usecols=[0, 1])  # it t
 
     if np.array(time_list).min() < it_time[:, 1].min():
         raise ValueError("list [sol.mass] time:{} < min time:{} in file: {}"
-                         .format(np.array(time_list).min(), it_time[:, 1].min(), file_it_use))
+                         .format(np.array(time_list).min(), it_time[:, 1].min(), path))
     if np.array(time_list).max() > it_time[:, 1].max():
         raise ValueError("list [sol.mass] time:{} > max time:{} in file: {}"
-                         .format(np.array(time_list).max(), it_time[:, 1].max(), file_it_use))
+                         .format(np.array(time_list).max(), it_time[:, 1].max(), path))
 
     f = interpolate.interp1d(it_time[:, 1], it_time[:, 0], kind='linear')
     it_list = f(time_list)
@@ -319,3 +426,39 @@ def interpoate_it_form_time(time_list, file_it_use, time_units='s'):
 
     return np.array(it_list, dtype=int)
 
+def x_y_z_sort(x_arr, y_arr, z_arr=np.empty(0, ), sort_by_012=0):
+    '''
+    RETURNS x_arr, y_arr, (z_arr) sorted as a matrix by a row, given 'sort_by_012'
+    :param x_arr:
+    :param y_arr:
+    :param z_arr:
+    :param sort_by_012:
+    :return:
+    '''
+
+    if not z_arr.any() and sort_by_012 < 2:
+        if len(x_arr) != len(y_arr):
+            raise ValueError('len(x)[{}]!= len(y)[{}]'.format(len(x_arr), len(y_arr)))
+
+        x_y_arr = []
+        for i in range(len(x_arr)):
+            x_y_arr = np.append(x_y_arr, [x_arr[i], y_arr[i]])
+
+        x_y_sort = np.sort(x_y_arr.view('float64, float64'), order=['f{}'.format(sort_by_012)], axis=0).view(
+            np.float)
+        x_y_arr_shaped = np.reshape(x_y_sort, (int(len(x_y_sort) / 2), 2))
+        return x_y_arr_shaped[:, 0], x_y_arr_shaped[:, 1]
+
+    if z_arr.any():
+        if len(x_arr) != len(y_arr) or len(x_arr) != len(z_arr):
+            raise ValueError('len(x)[{}]!= len(y)[{}]!=len(z_arr)[{}]'.format(len(x_arr), len(y_arr), len(z_arr)))
+
+        x_y_z_arr = []
+        for i in range(len(x_arr)):
+            x_y_z_arr = np.append(x_y_z_arr, [x_arr[i], y_arr[i], z_arr[i]])
+
+        x_y_z_sort = np.sort(x_y_z_arr.view('float64, float64, float64'), order=['f{}'.format(sort_by_012)],
+                             axis=0).view(
+            np.float)
+        x_y_z_arr_shaped = np.reshape(x_y_z_sort, (int(len(x_y_z_sort) / 3), 3))
+        return x_y_z_arr_shaped[:, 0], x_y_z_arr_shaped[:, 1], x_y_z_arr_shaped[:, 2]

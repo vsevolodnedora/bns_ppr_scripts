@@ -3,7 +3,7 @@
 #############################################################3
 class Paths:
 
-    ppr_sims =  '/data01/numrel/vsevolod.nedora/postprocessed/'
+    ppr_sims =  '/data01/numrel/vsevolod.nedora/postprocessed2/'
     lorene =    '/data01/numrel/vsevolod.nedora/Data/Lorene/'
     TOVs =      '/data01/numrel/vsevolod.nedora/Data/TOVs/'
     gw170817 =  '/data1/numrel/WhiskyTHC/Backup/2018/GW170817/'
@@ -27,18 +27,13 @@ class Lists:
               1.185:"lightseagreen", 1.201:"darkgreen", 1.222:"royalblue", 1.285:"navy"}
 
     dyn_not_pas = [
-                  "DD2_M13641364_M0_LK_HR_R04",
-                  "DD2_M13641364_M0_HR_R04",
-                  "DD2_M13641364_M0_HR",
-                  "DD2_M14861254_M0_HR",
-                  "LS220_M14001330_M0_HR",
-                  "LS220_M14351298_M0_HR",
-                  "LS220_M14691268_M0_HR",
-                  "LS220_M13641364_M0_HR",
-                  "SFHo_M13641364_M0_LR",
-                  "SFHo_M14521283_M0_LR",
-                  "SLy4_M13641364_M0_HR",
-                  "SLy4_M13641364_M0_LR",
+                  "DD2_M13641364_M0_HR_R04", # not in sim2
+                  "DD2_M13641364_M0_HR", # not in sim2
+                  "DD2_M14861254_M0_HR", # not in sim2
+                  "LS220_M14001330_M0_HR", # not in sim2
+                  "LS220_M14351298_M0_HR", # in sim2
+                  "SLy4_M13641364_M0_HR", # not in sim2
+                  "SLy4_M13641364_M0_LR", # in sim2 BUT problem with rocketing dynimical ejecta
                   ]
 
     tarball = [

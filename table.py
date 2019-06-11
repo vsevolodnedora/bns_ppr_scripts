@@ -67,6 +67,16 @@ def fill_self_dyn_phase_status():
         else:
             run["dyn_phase"] = "passed"
 
+def fill_self_bern_phase_status():
+
+    Printcolor.blue("...adding dynamical phase info from static list")
+
+    for run in table:
+        if run["name"] in Lists.bern_pass:
+            run["bern_phase"] = "passed"
+        else:
+            run["bern_phase"] = "not passed"
+
 # Parfile
 
 def get_par_form_parfile():
@@ -383,7 +393,7 @@ def fill_ej_times(tmrgr_dics, extension='_0'):
         except IOError:
             Printcolor.yellow("Warning: Ej IOError for {}".format(run["name"]))
 
-def fill_ej_times_bern(tmrgr_dics, extension='_0_b'):
+def fill_ej_times_bern(tmrgr_dics, extension='_0_b_w'):
 
 
     for run, tmrgr_dic in zip(table, tmrgr_dics):
@@ -461,6 +471,8 @@ if __name__ == '__main__':
 
     fill_self_dyn_phase_status()
 
+    fill_self_bern_phase_status()
+
     # save_table('models.csv')
 
     '''---------------------------| FILLING DATA FROM LORENE SUMMARY FILES |------------------------'''
@@ -498,7 +510,7 @@ if __name__ == '__main__':
 
     fill_unb_disk_times(dic_tmergs)
     fill_ej_times(dic_tmergs, extension="_0")       # geodesic
-    fill_ej_times_bern(dic_tmergs, extension="_0_b")# bernoulli
+    fill_ej_times_bern(dic_tmergs, extension="_0_b_w")# bernoulli
     fill_disk_mass_from_3d()
 
     save_table(Paths.output + Files.models)

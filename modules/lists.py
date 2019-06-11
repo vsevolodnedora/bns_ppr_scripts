@@ -3,7 +3,8 @@
 #############################################################3
 class Paths:
 
-    ppr_sims =  '/data01/numrel/vsevolod.nedora/postprocessed2/'
+    scripts  =  '/data01/numrel/vsevolod.nedora/scripts_server/'
+    ppr_sims =  '/data01/numrel/vsevolod.nedora/postprocessed3/'
     lorene =    '/data01/numrel/vsevolod.nedora/Data/Lorene/'
     TOVs =      '/data01/numrel/vsevolod.nedora/Data/TOVs/'
     gw170817 =  '/data1/numrel/WhiskyTHC/Backup/2018/GW170817/'
@@ -35,6 +36,16 @@ class Lists:
                   "SLy4_M13641364_M0_HR", # not in sim2
                   "SLy4_M13641364_M0_LR", # in sim2 BUT problem with rocketing dynimical ejecta
                   ]
+
+    bern_pass=[
+                  "LS220_M13641364_M0_LK_SR",
+                  "LS220_M13641364_M0_SR",
+                  "SFHo_M14521283_M0_LR",
+                  "SFHo_M14521283_M0_LK_SR",
+                  "SFHo_M13641364_M0_LK_SR_2019pizza",
+                  "SFHo_M13641364_M0_LK_SR",
+                  "SFHo_M14521283_M0_HR"
+    ]
 
     tarball = [
         # "bnstrackergen - bns_positions..asc",
@@ -80,6 +91,10 @@ class Lists:
     "volform.file *.h5",
     "w_lorentz.file *.h5"
 ]
+
+class Constants:
+
+    ns_rho = 1.6191004634e-5
 
 class Files:
     it_time     = 'collated/rho.maximum.asc'

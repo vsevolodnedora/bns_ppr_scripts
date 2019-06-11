@@ -985,6 +985,7 @@ class PLOT_MANY:
         # saving the result
         self.save_plot()
 
+
 # class PLOT_2D:
 #
 #     def __init__(self, data_cl):

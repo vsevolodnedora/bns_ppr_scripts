@@ -3,6 +3,9 @@ import numpy as np
 from lists import *
 from units import time_constant
 from glob import glob
+import os
+import re
+from math import log
 
 class Printcolor:
 
@@ -19,24 +22,40 @@ class Printcolor:
         pass
 
     @staticmethod
-    def red(text):
-        print(Printcolor.FAIL + text + Printcolor.ENDC)
+    def red(text, comma=','):
+        if comma == ',':
+            print(Printcolor.FAIL + text + Printcolor.ENDC),
+        else:
+            print(Printcolor.FAIL + text + Printcolor.ENDC)
 
     @staticmethod
-    def yellow(text):
-        print(Printcolor.WARNING + text + Printcolor.ENDC)
+    def yellow(text, comma=','):
+        if comma == ',':
+            print(Printcolor.WARNING + text + Printcolor.ENDC),
+        else:
+            print(Printcolor.WARNING + text + Printcolor.ENDC)
 
     @staticmethod
-    def blue(text):
-        print(Printcolor.OKBLUE + text + Printcolor.ENDC)
+    def blue(text, comma=','):
+        if comma == ',':
+            print(Printcolor.OKBLUE + text + Printcolor.ENDC),
+        else:
+            print(Printcolor.OKBLUE + text + Printcolor.ENDC)
 
     @staticmethod
-    def green(text):
-        print(Printcolor.OKGREEN + text + Printcolor.ENDC)
+    def green(text, comma=','):
+        if comma == ',':
+            print(Printcolor.OKGREEN + text + Printcolor.ENDC),
+        else:
+            print(Printcolor.OKGREEN + text + Printcolor.ENDC)
+            
 
     @staticmethod
-    def bold(text):
-        print(Printcolor.BOLD + text + Printcolor.ENDC)
+    def bold(text, comma=','):
+        if comma == ',':
+            print(Printcolor.BOLD + text + Printcolor.ENDC),
+        else:
+            print(Printcolor.BOLD + text + Printcolor.ENDC)
 
 class LABELS:
     def __init__(self):
@@ -180,25 +199,30 @@ class PHYSICS:
         return integ_over_phi, integ_over_phi_r
 
     @staticmethod
-    def get_dens_decomp_3d(dens_3d, phi_3d, dphi_3d, dr_3d, dz_3d, m=1):
+    def get_dens_decomp_3d(dens_3d, r, phi_3d, dphi_3d, dr_3d, dz_3d, m=1):
         '''
         Integrates density over 'z'
         Returns complex arrays [\int(d\phi)] and [\int(dr d\phi)]
         '''
 
-        integ_dens_z = np.sum(dens_3d * dz_3d[:, :, 0], axis=2) # -> 2d array
+        integ_dens_z = np.sum(dens_3d * dz_3d[:, :, :], axis=2) # -> 2d array
 
         integ_over_z_phi = np.sum(integ_dens_z * np.exp(1j * m * phi_3d[:, :, 0]) * dphi_3d[:, :, 0], axis=1) # -> 1d array
 
-        integ_over_z_phi_r = np.sum(integ_over_z_phi * dr_3d[:, 0, 0]) # -> number
+        integ_over_z_phi_r = np.sum(integ_over_z_phi * dr_3d[:, 0, 0] * r[:, 0, 0]) # -> number
 
         return integ_over_z_phi, integ_over_z_phi_r
+
+    @staticmethod
+    def get_retarded_time(t, M_Inf=2.7, R_GW=400.0):
+        R = R_GW * (1 + M_Inf / (2 * R_GW)) ** 2
+        rstar = R + 2 * M_Inf * log(R / (2 * M_Inf) - 1)
+        return t - rstar
 
 def find_nearest_index(array, value):
         ''' Finds index of the value in the array that is the closest to the provided one '''
         idx = (np.abs(array - value)).argmin()
         return idx
-
 
 def combine(x, y, xy, corner_val=None):
     '''creates a 2d array  1st raw    [0, 1:]-- x -- density      (log)
@@ -351,7 +375,7 @@ def set_it_output_map(path_to_sim, file_for_it="dens.norm1.asc", clean=True):
 
     return output_it_map, np.vstack((iterations, timestpes)).T
 
-def interpoate_time_form_it(it_list, path, time_units='s', extrapolate=True):
+def interpoate_time_form_it(it_list, path_to_sim, time_units='s', extrapolate=True):
     '''
     From list of iterations, returns a list of timesteps (in seconds)
     '''
@@ -361,7 +385,7 @@ def interpoate_time_form_it(it_list, path, time_units='s', extrapolate=True):
 
     # path_to_template = file_it_use # "/collated/outflow_det_0.asc"
 
-    _, it_time = set_it_output_map(path)# np.loadtxt(path_to_template, unpack=False, usecols=[0, 1])  # it t
+    _, it_time = set_it_output_map(path_to_sim)# np.loadtxt(path_to_template, unpack=False, usecols=[0, 1])  # it t
 
     if not any(it_list):
         raise ValueError("Passes empty iteration list")
@@ -370,14 +394,14 @@ def interpoate_time_form_it(it_list, path, time_units='s', extrapolate=True):
 
     if np.array(it_list).min() < it_time[:, 0].min():
         raise ValueError("list it:{} < min it:{} in sim: {}"
-                         .format(np.array(it_list).min(), it_time[:, 0].min(), path))
+                         .format(np.array(it_list).min(), it_time[:, 0].min(), path_to_sim))
     if np.array(it_list).max() > it_time[:, 0].max():
         if extrapolate:
             Printcolor.yellow("list it:{} > max it:{} in sim: {}"
-                             .format(np.array(it_list).max(), it_time[:, 0].max(), path))
+                              .format(np.array(it_list).max(), it_time[:, 0].max(), path_to_sim))
         else:
             raise ValueError("list it:{} > max it:{} in sim: {}"
-                             .format(np.array(it_list).max(), it_time[:, 0].max(), path))
+                             .format(np.array(it_list).max(), it_time[:, 0].max(), path_to_sim))
 
     if extrapolate:
         f = interpolate.interp1d(it_time[:, 0], it_time[:, 1], kind='linear', bounds_error=False,
@@ -426,6 +450,87 @@ def interpoate_it_form_time(time_list, path, time_units='s'):
 
     return np.array(it_list, dtype=int)
 
+def get_list_iterationsfrom_res_3d(sim):
+    """
+    Checks the /res_3d/ for 12345 folders, (iterations) retunrs their sorted list
+    :param sim:
+    :return:
+    """
+
+    if not os.path.isdir(Paths.ppr_sims + sim + '/res_3d/'):
+        raise IOError("no {} directory found".format(Paths.ppr_sims + sim + '/res_3d/'))
+    itdirs = os.listdir(Paths.ppr_sims + sim + '/res_3d/')
+    if len(itdirs) == 0:
+        raise NameError("No iteration-folders found in the {}".format(Paths.ppr_sims + sim + '/res_3d/'))
+
+
+    # this is a f*cking masterpiece of programming)))
+    list_iterations = np.array(np.sort(np.array(list([int(itdir) for itdir in itdirs if re.match("^[-+]?[0-9]+$", itdir)]))))
+    if len(list_iterations) == 0:
+        raise ValueError("Error extracting the iterations")
+
+    return list(list_iterations)
+
+def get_list_iterationsfrom_profiles_3d(sim, in_sim_dir="/profiles/3d/"):
+    """
+    Checks the /res_3d/ for 12345 folders, (iterations) retunrs their sorted list
+    :param sim:
+    :return:
+    """
+
+    if not os.path.isdir(Paths.gw170817 + sim + in_sim_dir):
+        raise IOError("no {} directory found".format(Paths.gw170817 + sim + in_sim_dir))
+    profiles = glob(Paths.gw170817 + sim + in_sim_dir + "*.h5")
+    if len(profiles) == 0:
+        raise NameError("No iteration-folders found in the {}".format(Paths.ppr_sims + sim + in_sim_dir))
+
+    # print(profiles)
+
+    # this is a f*cking masterpiece of programming)))
+    list_iterations = np.array(np.sort(np.array(list([int(profile.split('/')[-1].split(".h5")[0])
+                                                      for profile in profiles
+                                                      if re.match("^[-+]?[0-9]+$",
+                                                                  profile.split('/')[-1].split(".h5")[0])]))))
+    if len(list_iterations) == 0:
+        raise ValueError("Error extracting the iterations")
+
+    return list(list_iterations)
+
+def find_itdir_with_grid(sim, gridfname='cyl_grid.h5'):
+
+    # for dir_ in os.listdir()
+
+
+
+
+    path = Paths.ppr_sims + sim + '/res_3d/' + '*' + '/' + gridfname
+    files = glob(path)
+
+    # print(files)
+
+    if len(files) == 0:
+        raise ValueError("No grid file ({}) found for {}".format(gridfname, sim))
+
+    if len(files) > 1:
+        Printcolor.yellow("More than 1({}) grid file ({}) found for {}"
+                          .format(len(files), gridfname, sim))
+        return files[0]
+
+    return str(files)
+
+
+def get_it_from_itdir(itdir):
+    return int(itdir.split('/')[-2])
+
+
+def get_list_ppr_simulations():
+
+    sims = os.listdir(Paths.ppr_sims)
+    return sims
+
+
+
+
 def x_y_z_sort(x_arr, y_arr, z_arr=np.empty(0, ), sort_by_012=0):
     '''
     RETURNS x_arr, y_arr, (z_arr) sorted as a matrix by a row, given 'sort_by_012'
@@ -436,7 +541,7 @@ def x_y_z_sort(x_arr, y_arr, z_arr=np.empty(0, ), sort_by_012=0):
     :return:
     '''
 
-    if not z_arr.any() and sort_by_012 < 2:
+    if len(z_arr) == 0 and sort_by_012 < 2:
         if len(x_arr) != len(y_arr):
             raise ValueError('len(x)[{}]!= len(y)[{}]'.format(len(x_arr), len(y_arr)))
 
@@ -449,7 +554,7 @@ def x_y_z_sort(x_arr, y_arr, z_arr=np.empty(0, ), sort_by_012=0):
         x_y_arr_shaped = np.reshape(x_y_sort, (int(len(x_y_sort) / 2), 2))
         return x_y_arr_shaped[:, 0], x_y_arr_shaped[:, 1]
 
-    if z_arr.any():
+    if len(z_arr) > 0 and len(z_arr) == len(y_arr):
         if len(x_arr) != len(y_arr) or len(x_arr) != len(z_arr):
             raise ValueError('len(x)[{}]!= len(y)[{}]!=len(z_arr)[{}]'.format(len(x_arr), len(y_arr), len(z_arr)))
 
@@ -458,7 +563,6 @@ def x_y_z_sort(x_arr, y_arr, z_arr=np.empty(0, ), sort_by_012=0):
             x_y_z_arr = np.append(x_y_z_arr, [x_arr[i], y_arr[i], z_arr[i]])
 
         x_y_z_sort = np.sort(x_y_z_arr.view('float64, float64, float64'), order=['f{}'.format(sort_by_012)],
-                             axis=0).view(
-            np.float)
+                             axis=0).view(np.float)
         x_y_z_arr_shaped = np.reshape(x_y_z_sort, (int(len(x_y_z_sort) / 3), 3))
         return x_y_z_arr_shaped[:, 0], x_y_z_arr_shaped[:, 1], x_y_z_arr_shaped[:, 2]

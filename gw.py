@@ -44,12 +44,14 @@ class SIM_GW:
     fold = 'waveforms/'
     l2_m2_fname = 'waveform_l2_m2.dat' # created by convert.py
     tmerg_fname = 'tmerger.dat'
+    tcoll_fname = 'tcoll.dat'
 
     def __init__(self, sim):
 
         self.sim = sim
         self.l2_m2_file = MakePath.waveforms(sim) + Files.l2_m2
         self.tmerg_file = MakePath.waveforms(sim) + Files.tmerg
+        self.tmerg_file = MakePath.waveforms(sim) + SIM_GW.tcoll_fname
 
     def load_l2_m2(self):
 
@@ -70,6 +72,19 @@ class SIM_GW:
         tmerg = ut.conv_time(ut.cactus, ut.cgs, tmerg)  # in s
 
         return tmerg # in s
+
+    def load_tcoll(self):
+
+        try:
+            tcoll = np.loadtxt(self.tmerg_fname, unpack=True)
+        except IOError:
+            Printcolor.yellow("Warning: file {} not found".format(self.tmerg_fname))
+            return np.nan
+
+        tcoll = np.float(tcoll) # in cactus units
+        tcoll = ut.conv_time(ut.cactus, ut.cgs, tcoll)  # in s
+
+        return tcoll
 
 if __name__ == '__main__':
     gw = SIM_GW('DD2_M13641364_M0_SR'); print("tmerg: {} [s]".format(gw.load_tmerg()))

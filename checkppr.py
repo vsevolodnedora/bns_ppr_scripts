@@ -52,55 +52,84 @@ def get_last_it_ppr(sim, fname="dens.norm1.asc"):
 
     it_time = np.loadtxt(path+fname, usecols=(0, 1))
 
-    return it_time[:,0].max(), it_time[:,0].max() *  0.004925794970773136 * 1e-3
+    return it_time[:,0].max(), it_time[:,1].max() *  0.004925794970773136 * 1e-3
 
-def analyze_sim(sim):
+def analyze_sim(sim, time_limit=0.030):
 
     if not sim in pprs:
-        Printcolor.red("\t{} NOT in postprocessed2".format(sim))
-        print("\t\t{} outputs".format(len(outputs)))
+        Printcolor.red(", NOT in ppr"),
+
         it, t = get_last_it_gw(sim)
-        print("\t\tGW: it:{} time:{}".format(it, t))
+
+        if t < time_limit:
+            Printcolor.red(", tend {:.3f}s".format(t), ','),
+        else:
+            Printcolor.green(", tend {:.3f}s".format(t), ','),
+        #
+        # print(", GW [it:{:d} time:{:.3f}]".format(int(it), t)),
 
     else:
-        Printcolor.blue("\t{} in postprocessed".format(sim))
-        print("\t\t{} outputs".format(len(outputs)))
+        Printcolor.blue(", in ppr"),
+
         it, t = get_last_it_gw(sim)
-        print("\t\tGW: it:{} time:{}".format(it, t))
+        # print(", GW [it:{:d} time:{:.3f}]".format(int(it), t)),
         it_, t_ = get_last_it_ppr(sim)
-        print("\t\tPPR: it:{} time:{}".format(it_, t_))
-        if it != it_:
-            Printcolor.red("\t\tit({}) != ppr it({}): Postrocessing required".format(it, it_))
+        # print(", PPR: [it:{:d} time:{:.3f}]".format(int(it_), t_)),
+        if int(it) != int(it_):
+            Printcolor.red(", ppr REQUIRED [t_gw:{:.3f} t_ppr:{:3f}]".format(t, t_), ','),
+        else:
+            Printcolor.green(", ppr is complete", ',')
+
+        if t < time_limit:
+            Printcolor.red(", tend {:.3f}s".format(t), ','),
+        else:
+            Printcolor.green(", tend {:.3f}s".format(t), ','),
 
         if not os.path.isfile(Paths.ppr_sims+sim+"/parfile.par"):
-            Printcolor.red("\tparfile not found")
+            Printcolor.red(", parfile not found |"),
 
         outflowed = os.path.isdir(MakePath.outflow(sim, "_0"))
         if outflowed:
-            Printcolor.blue("\t\t\tGEO outflow is done")
+            Printcolor.green(" _0 done", ',')
         else:
-            Printcolor.red("\t\t\tGEO outflow is NOT done")
+            Printcolor.red(" _0 NOT done", ',')
+
+        if not sim in Lists.dyn_not_pas:
+            Printcolor.green(" Dyn pass", ',')
+        else:
+            Printcolor.red(" Dyn NOT pass", ',')
+
+        if sim in Lists.bern_pass:
+            Printcolor.green(" Bern pass", ',')
+        else:
+            Printcolor.yellow(" Bern NOT pass", ',')
+
 
         outflowed_b_w = os.path.isdir(MakePath.outflow(sim, "_0_b_w"))
         if outflowed_b_w:
-            Printcolor.blue("\t\t\tBernoulli Wind outflow is done")
+            Printcolor.green(", _0_b_w done", ',')
         else:
-            Printcolor.red("\t\t\tBernoulli Wind outflow is NOT done")
+            Printcolor.red(", _0_b_w NOT done", ',')
 
 for sim in gws:
-    print("\n------------------------------------------")
-    print("{}".format(sim))
+    # print("\n------------------------------------------")
+    print("{}\t ".format(sim)),
     outputs, tars, dattars = get_outputs(sim)
-
-    print("\toutput({}) .tar({}) .dat.tar({})".format(len(outputs), len(tars), len(dattars)))
+    # print("\toutput({}) .tar({}) .dat.tar({})".format(len(outputs), len(tars), len(dattars)))
 
     if len(outputs) > 0:
-        Printcolor.blue("\t{} has {} outputs".format(sim, len(outputs)))
+        Printcolor.blue("\t{} outputs".format(len(outputs))),
+
+        # analyze_sim(sim)
 
         try:
             analyze_sim(sim)
         except ValueError:
-            Printcolor.red("Error. {} files for it_time not found".format(sim))
+            Printcolor.red("Error. FAILD with ValueError" ',')
+    else:
+        Printcolor.red("\tNO outputs")
+
+    print(" |")
 
 if len(gws) < len(pprs):
     Printcolor.red("NOT in gw170717:")

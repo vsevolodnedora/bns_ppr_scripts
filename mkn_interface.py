@@ -40,6 +40,9 @@ from lists import *
 from filework import *
 from units import time_constant, volume_constant, energy_constant
 
+from overall import MODELS
+from plotting_nexus import PLOT_MANY_TASKS
+
 path.append(Paths.mkn)
 from mkn import MKN
 
@@ -48,6 +51,7 @@ class COMPUTE_LIGHTCURVE():
 
     def __init__(self, sim):
 
+        self.table = MODELS()
 
         # if criteria == '' or criteria == 'geo':
         #     self.path_to_outflow_dir = LISTS.loc_of_sims + sim + '/outflow_{}/'.format(det)
@@ -60,16 +64,19 @@ class COMPUTE_LIGHTCURVE():
         # else:
         #     raise NameError("Criteria '{}' is not recongnized".format(criteria))
         self.sim = sim
+        self.output_fname = 'mkn_model.h5'
         self.path_to_outflow_dir = MakePath.outflow(sim, '_0')
         self.path_to_outflow_dir_psdyn = MakePath.outflow(sim, '_0_b_w')
-        dyn_ejecta_profile_fpath = self.path_to_outflow_dir + Files.ejecta_profile
-        psdyn_ejecta_profile_fpath=self.path_to_outflow_dir_psdyn + Files.ejecta_profile_bern
+        self.dyn_ejecta_profile_fpath = self.path_to_outflow_dir + Files.ejecta_profile
+        self.psdyn_ejecta_profile_fpath=self.path_to_outflow_dir_psdyn + Files.ejecta_profile_bern
 
 
-        set_dyn_iso_aniso       = "aniso"
-        set_psdyn_iso_aniso     = "aniso"
-        set_wind_iso_aniso      = "aniso"
-        set_secular_iso_aniso   = ""
+        self.set_use_dyn_NR = True
+        self.set_use_bern_NR = True
+        self.set_dyn_iso_aniso       = "aniso"
+        self.set_psdyn_iso_aniso     = "aniso"
+        self.set_wind_iso_aniso      = "aniso"
+        self.set_secular_iso_aniso   = "aniso"
 
         self.glob_params    = {}
         self.glob_vars      = {}
@@ -77,16 +84,26 @@ class COMPUTE_LIGHTCURVE():
         self.ejecta_vars    = {}
         self.source_name    = {}
 
-        self.set_glob_par_var_source(True, dyn_ejecta_profile_fpath,
-                                     True, psdyn_ejecta_profile_fpath)
-        self.set_dyn_par_var(set_dyn_iso_aniso)
-        self.set_psdyn_par_var(set_psdyn_iso_aniso)
-        self.set_wind_par_war(set_wind_iso_aniso)
-        self.set_secular_par_war(set_secular_iso_aniso)
+        # self.set_glob_par_var_source(True, dyn_ejecta_profile_fpath,
+        #                              True, psdyn_ejecta_profile_fpath)
+        # self.set_dyn_par_var(self.set_dyn_iso_aniso)
+        # self.set_psdyn_par_var(self.set_psdyn_iso_aniso)
+        # self.set_wind_par_war(self.set_wind_iso_aniso)
+        # self.set_secular_par_war(self.set_secular_iso_aniso)
 
         # self.compute_save_lightcurve(write_output=True)
 
     '''------------------------------------------'''
+
+    def set_par_war(self):
+
+
+        self.set_glob_par_var_source(self.set_use_dyn_NR, self.dyn_ejecta_profile_fpath,
+                                     self.set_use_bern_NR, self.psdyn_ejecta_profile_fpath)
+        self.set_dyn_par_var(self.set_dyn_iso_aniso)
+        self.set_psdyn_par_var(self.set_psdyn_iso_aniso)
+        self.set_wind_par_war(self.set_wind_iso_aniso)
+        self.set_secular_par_war(self.set_secular_iso_aniso)
 
     def set_glob_par_var_source(self, NR_data=True, dyn_ej_prof_fpath="",NR2_data=True, psdyn_ej_prof_fpath=""):
 
@@ -116,7 +133,7 @@ class COMPUTE_LIGHTCURVE():
 
         self.source_name = 'AT2017gfo'
 
-        self.glob_vars = {'m_disk':     0.20,
+        self.glob_vars = {'m_disk':     self.table.get_value(self.sim, "Mdisk3D"), # 0.070, # LS220 | 0.20 - DD2
                          'eps0':        1.5e19,
                          'T_floor_LA':  1000.,
                          'T_floor_Ni':  3500.,
@@ -146,18 +163,18 @@ class COMPUTE_LIGHTCURVE():
         elif iso_or_aniso == 'aniso':
             self.ejecta_params['dynamics'] = {'mass_dist': 'sin2', 'vel_dist': 'uniform', 'op_dist': 'step',
                                               'therm_model': 'BKWM', 'eps_ye_dep': True, 'v_law': 'power'}
-            self.ejecta_vars['dynamics'] = {'xi_disk':           None,
-                                           'm_ej':              0.003,
+            self.ejecta_vars['dynamics'] = {'xi_disk':          None,
+                                           'm_ej':              self.table.get_value(self.sim, "Mej"), # 0.00169045, # - LS220 | 0.00263355 - DD2
                                            'step_angle_mass':   None,
                                            'high_lat_flag':     None,
-                                           'central_vel':       0.33,
+                                           'central_vel':       0.20, # changed from 0.33
                                            'high_lat_vel':      None,
                                            'low_lat_vel':       None,
                                            'step_angle_vel':    None,
                                            'central_op':        None,
-                                           'high_lat_op':       1.,
-                                           'low_lat_op':        10., # does not work for NR
-                                           'step_angle_op': math.radians(45.)}
+                                           'high_lat_op':       1.,  # F:1
+                                           'low_lat_op':        10., # F:30    # does not work for NR
+                                           'step_angle_op': math.radians(45.)} # F:30
         elif iso_or_aniso == "":
             pass
         else:
@@ -183,19 +200,19 @@ class COMPUTE_LIGHTCURVE():
                                            'low_lat_op':        None,
                                            'step_angle_op':     None}
         elif iso_or_aniso == 'aniso':
-            self.ejecta_params['psdynamics'] = {'mass_dist': 'sin2', 'vel_dist': 'uniform', 'op_dist': 'step',
+            self.ejecta_params['psdynamics'] = {'mass_dist': 'sin2', 'vel_dist': 'uniform', 'op_dist': 'uniform',
                                               'therm_model': 'BKWM', 'eps_ye_dep': True, 'v_law': 'power'}
             self.ejecta_vars['psdynamics'] = {'xi_disk':           None,
-                                           'm_ej':              0.008,
+                                           'm_ej':              self.table.get_value(self.sim, "Mej_bern"), #0.00364718, # - LS220 | 0.010218 - DD2
                                            'step_angle_mass':   None,
                                            'high_lat_flag':     None,
-                                           'central_vel':       0.33,
+                                           'central_vel':       0.27,
                                            'high_lat_vel':      None,
                                            'low_lat_vel':       None,
                                            'step_angle_vel':    None,
-                                           'central_op':        None,
-                                           'high_lat_op':       1.,
-                                           'low_lat_op':        10.,
+                                           'central_op':        1.,
+                                           'high_lat_op':       None,
+                                           'low_lat_op':        None,
                                            'step_angle_op': math.radians(45.)}
         elif iso_or_aniso == "":
             pass
@@ -224,18 +241,19 @@ class COMPUTE_LIGHTCURVE():
         elif iso_or_aniso == 'aniso':
             self.ejecta_params['wind'] = {'mass_dist':'step', 'vel_dist':'uniform', 'op_dist':'step',
                          'therm_model':'BKWM','eps_ye_dep':True,'v_law':'power'}
-            self.ejecta_vars['wind'] = {'xi_disk':         0.02,
+            self.ejecta_vars['wind'] = {
+                         'xi_disk':         0.02, # F: 0.2    | 0.001 to 0.2
                          'm_ej':            None,
                          'step_angle_mass': math.radians(60.),
                          'high_lat_flag':   True,
-                         'central_vel':     0.08,
+                         'central_vel':     0.068, # F: 0.068 V:0.08
                          'high_lat_vel':    None,
                          'low_lat_vel':     None,
                          'step_angle_vel':  None,
                          'central_op':      None,
-                         'high_lat_op':     0.5,
-                         'low_lat_op':      5.0,
-                         'step_angle_op':   math.radians(30.)}
+                         'high_lat_op':     0.5, # F
+                         'low_lat_op':      5.0, # F
+                         'step_angle_op':   math.radians(45.)} # F: 45 | might need # N:30
         elif iso_or_aniso == "":
             pass
         else:
@@ -261,18 +279,20 @@ class COMPUTE_LIGHTCURVE():
         elif iso_or_aniso == 'aniso':
             self.ejecta_params['secular'] = {'mass_dist':'sin2', 'vel_dist':'uniform', 'op_dist':'uniform',
                             'therm_model':'BKWM','eps_ye_dep':True,'v_law':'power'}
-            self.ejecta_vars['secular'] = {'xi_disk':          0.1,
+            self.ejecta_vars['secular'] = {
+                            'xi_disk':          0.1, # F: 0.4
                             'm_ej':             None,
                             'step_angle_mass':  None,
                             'high_lat_flag':    None,
-                            'central_vel':      0.06,
+                            'central_vel':      0.04, # F: 0.04 V:0.06
                             'high_lat_vel':     None,
                             'low_lat_vel':      None,
                             'step_angle_vel':   None,
-                            'central_op':       5.0,
+                            'central_op':       5.0, #
                             'low_lat_op':       None,
                             'high_lat_op':      None,
-                            'step_angle_op':    None}
+                            'step_angle_op':    None
+            }
         elif iso_or_aniso == "":
             pass
         else:
@@ -337,6 +357,13 @@ class COMPUTE_LIGHTCURVE():
     def compute_save_lightcurve(self, write_output = True):
         # glob_params, glob_vars, ejecta_params, shell_vars, source_name_d
 
+        if len(self.glob_params.keys()) == 0:
+            raise ValueError("parameters are not set. Use 'set_par_war()' for that")
+
+        if not os.path.isdir(Paths.ppr_sims+self.sim+'/res_mkn/'):
+            print("making directory {}".format(Paths.ppr_sims+self.sim+'/res_mkn/'))
+            os.mkdir(Paths.ppr_sims+self.sim+'/res_mkn/')
+
         print('I am initializing the model')
         # glob_params, glob_vars, ejecta_params, shell_vars, source_name = self.mkn_parameters()
 
@@ -369,7 +396,7 @@ class COMPUTE_LIGHTCURVE():
             # from shutil import move
             from shutil import copyfile
             # move('./mkn_model.txt', self.path_to_outflow_dir + 'mkn_model.txt')
-            copyfile('./mkn_model.h5', self.path_to_outflow_dir + 'mkn_model.h5')
+            copyfile('./mkn_model.h5', Paths.ppr_sims+self.sim+'/res_mkn/' + self.output_fname)
 
         os.chdir(Paths.home)
         return logL
@@ -620,11 +647,957 @@ class COMPUTE_LIGHTCURVE():
         plt.savefig(Paths.plots+'smoothed_profs.png', bbox_inches='tight', dpi=128)
         plt.close()
 
+
+class LOAD_LIGHTCURVE():
+
+    def __init__(self, sim):
+
+        self.sim = sim
+        self.default_fname = "mkn_model.h5"
+
+        self.filter_fpath = Paths.mkn + Files.filt_at2017gfo
+
+        self.list_model_fnames = ["mkn_model.h5", "mkn_model1.h5", "mkn_model2.h5", "mkn_model3.h5", "mkn_model4.h5"]
+        self.list_obs_filt_fnames = ["AT2017gfo.h5"]
+        self.list_fnames = self.list_model_fnames + self.list_obs_filt_fnames
+
+        self.data_matrix = [{}
+                             for y in range(len(self.list_fnames))]
+
+        self.filters = {}
+
+    def check_fname(self, fname=''):
+        if not fname in self.list_fnames:
+            raise NameError("fname: {} not in list_fnames:\n{}"
+                            .format(fname, self.list_fnames))
+
+    def i_fname(self, fname=''):
+        return int(self.list_fnames.index(fname))
+
+    def load_mkn_model(self, fname=''):
+
+        if fname == '': fname = self.default_fname
+        model_fpath = Paths.ppr_sims + self.sim + "/res_mkn/" + fname
+
+        dict_model = {}
+
+        model = h5py.File(model_fpath, "r")
+        filters_model = []
+        for it in model:
+            filters_model.append(it)
+            dict_model[str(it)] = np.array(model[it])
+
+        # print('\t Following filters are available in mkn_model.h5: \n\t  {}'.format(filters_model))
+
+        self.data_matrix[self.i_fname(fname)] = dict_model
+
+    def load_obs_filters(self, fname=''):
+
+        dict_obs_filters = {}
+
+        obs_filters = h5py.File(self.filter_fpath, "r")
+
+        filters_model = []
+        for it in obs_filters:
+            filters_model.append(it)
+            arr = np.array(obs_filters[it])
+            # print(arr.shape)
+            dict_obs_filters[str(it)] = np.array(obs_filters[it])
+
+        # print('\t Following filters are available in AT2017gfo.h5: \n\t  {}'.format(filters_model))
+
+        self.filters = dict_obs_filters
+
+    def is_filters_loaded(self, fname):
+
+        if not bool(self.filters):
+            self.load_obs_filters(fname)
+
+    def is_mkn_file_loaded(self, fname=''):
+
+        if not bool(self.data_matrix[self.i_fname(fname)]):
+            self.load_mkn_model(fname)
+
+    def get_mkn_model(self, fname=''):
+
+        self.check_fname(fname)
+        self.is_mkn_file_loaded(fname)
+
+        return self.data_matrix[self.i_fname(fname)]
+
+    def get_filters(self, fname):
+        self.is_filters_loaded(fname)
+        return self.filters
+
+
+class EXTRACT_LIGHTCURVE(LOAD_LIGHTCURVE):
+
+    def __init__(self, sim):
+        LOAD_LIGHTCURVE.__init__(self, sim)
+        self.list_bands = ["g", "z", "Ks"]
+
+        self.model_mag_matrix = [[ []
+                                     for y in range(len(self.list_bands))]
+                                     for z in range(len(self.list_fnames))]
+        self.obs_mag_matrix = [[ []
+                                     for y in range(len(self.list_bands))]
+                                     for z in range(len(self.list_fnames))]
+
+
+    def check_band(self, band):
+        if not band in self.list_bands:
+            raise NameError("band:{} not in tha band list:{}"
+                            .format(band, self.list_bands))
+
+
+    def i_band(self, band):
+        return int(self.list_bands.index(band))
+
+
+
+    def extract_lightcurve(self, band, fname=''):
+
+        dict_model = self.get_mkn_model(fname)
+        # arr = np.zeros(len(dict_model['time']))
+        time_ = np.array(dict_model['time'])
+        # if not band in dict_model.keys():
+        #     raise NameError("band:{} is not in the loaded model:\n{}"
+        #                     .format(band, dict_model.keys()))
+
+        res = []
+        for filter in dict_model.keys():
+            if filter.split('_')[0] == band:
+                # arr = np.vstack((arr, dict_model[filter]))
+                res.append(np.vstack((time_, np.array(dict_model[filter]))).T)
+        # times = arr[:, 0]
+        # arr = np.delete(arr, 0, 0)
+
+        if len(res) == 0:
+            raise NameError("band:{} is not found in the loaded model:\n{}"
+                                .format(band, dict_model.keys()))
+
+        self.model_mag_matrix[self.i_fname(fname)][self.i_band(band)] = res
+
+
+    def extract_obs_data(self, band, fname):
+
+        dict_obs_filters = self.get_filters(fname)
+        # dict_model = self.get_mkn_model(fname)
+
+        sub_bands = []
+        for filter in dict_obs_filters.keys():
+            if filter.split('_')[0] == band:# and filter in dict_obs_filters.keys():
+                sub_bands.append(dict_obs_filters[filter])
+
+
+        if len(sub_bands) == 0:
+            raise NameError("band:{} is not found in the loaded obs filters:\n{}"
+                            .format(band, dict_obs_filters.keys()))
+
+        self.obs_mag_matrix[self.i_fname(fname)][self.i_band(band)] = sub_bands
+
+    def is_extracted(self, band, fname=''):
+
+        data = self.model_mag_matrix[self.i_fname(fname)][self.i_band(band)]
+
+        if len(data)  == 0 and fname in self.list_model_fnames:
+            self.extract_lightcurve(band, fname)
+
+        if len(data) == 0 and fname in self.list_obs_filt_fnames:
+            self.extract_obs_data(band, fname)
+
+
+
+    def get_obs_data(self, band, fname="AT2017gfo.h5"):
+        self.check_fname(fname)
+        self.check_band(band)
+
+        self.is_extracted(band, fname)
+
+        return self.obs_mag_matrix[self.i_fname(fname)][self.i_band(band)]
+
+
+    def get_model(self, band, fname="mkn_model.h5"):
+        self.check_band(band)
+        self.check_fname(fname)
+
+        self.is_extracted(band, fname)
+
+        return self.model_mag_matrix[self.i_fname(fname)][self.i_band(band)]
+
+    def get_model_min_max(self, band, fname="mkn_model.h5"):
+
+        band_list = self.get_model(band, fname)
+
+        maxs = []
+        mins = []
+        times = []
+        mags = []
+        for i_band, band in enumerate(band_list):
+            times = band[:, 0]
+            mags = np.append(mags, band[:, 1])
+
+        mags = np.reshape(mags, (len(band_list), len(times)))
+
+        for i in range(len(times)):
+            maxs.append(mags[:,i].max())
+            mins.append(mags[:,i].min())
+
+        return times, maxs, mins
+        #
+        #
+        #
+        #
+        # time_ = arr[0, :]
+        # # arr = np.delete(arr, 0, 0)
+        #
+        # print(arr.shape)
+        # print(arr)
+        #
+        # maxs = []
+        # for i in range(len(arr[0, :])):
+        #     maxs = np.append(maxs, arr[1:,i].max())
+        #
+        # mins = []
+        # for i in range(len(arr[0, :])):
+        #     mins = np.append(mins, arr[1:,i].min())
+        #
+        # if len(time_) != len(mins):
+        #     raise ValueError("len(time_) {} != {} len(mins)"
+        #                      .format(len(time_) ,len(mins)))
+        #
+        #
+        #
+        # return time_, mins, maxs
+
+
+
+''' ---------------------------------------------- '''
+
+
+
+
+
+class LOAD_LIGHTCURVES():
+
+    def __init__(self, sim):
+
+        self.sim = sim
+        self.default_fname = "mkn_model.h5"
+
+        self.filter_fpath = Paths.mkn + Files.filt_at2017gfo
+
+        self.list_fnames = ['', "mkn_model.h5"]
+        self.list_of_sims = os.listdir(Paths.ppr_sims)
+
+        self.data_matrix = [[{}
+                             for x in range(len(self.list_fnames))]
+                             for y in range(len(self.list_of_sims))]
+
+        self.filters = {}
+
+    def check_sim(self, sim):
+        if not sim in self.list_of_sims:
+            raise NameError("sim: {} not in list_of_sims:\n{}"
+                            .format(sim, self.list_of_sims))
+
+    def check_fname(self, fname):
+        if not fname in self.list_fnames:
+            raise NameError("fname: {} not in list_fnames:\n{}"
+                            .format(fname, self.list_fnames))
+
+    def i_sim(self, sim):
+        return int(self.list_of_sims.index(sim))
+
+    def i_fname(self, fname):
+        return int(self.list_fnames.index(fname))
+
+
+    def load_mkn_model(self, sim, fname):
+
+        if fname == '': fname = self.default_fname
+        model_fpath = Paths.ppr_sims + sim + "/res_mkn/" + fname
+
+        dict_model = {}
+
+        model = h5py.File(model_fpath, "r")
+        filters_model = []
+        for it in model:
+            filters_model.append(it)
+            dict_model[str(it)] = np.array(model[it])
+
+        # print('\t Following filters are available in mkn_model.h5: \n\t  {}'.format(filters_model))
+
+        self.data_matrix[self.i_sim(sim)][self.i_fname(fname)] = dict_model
+
+    def load_obs_filters(self):
+
+        dict_obs_filters = {}
+
+        obs_filters = h5py.File(self.filter_fpath, "r")
+
+        filters_model = []
+        for it in obs_filters:
+            filters_model.append(it)
+            arr = np.array(obs_filters[it])
+            # print(arr.shape)
+            dict_obs_filters[str(it)] = np.array(obs_filters[it])
+
+        # print('\t Following filters are available in AT2017gfo.h5: \n\t  {}'.format(filters_model))
+
+        self.filters = dict_obs_filters
+
+    def is_filters_loaded(self):
+
+        if not bool(self.filters):
+            self.load_obs_filters()
+
+    def is_mkn_file_loaded(self, sim, fname):
+
+        if not bool(self.data_matrix[self.i_sim(sim)][self.i_fname(fname)]):
+            self.load_mkn_model(sim, fname)
+
+    def get_mkn_model(self, sim, fname):
+
+        self.check_sim(sim)
+        self.check_fname(fname)
+        self.is_mkn_file_loaded(sim, fname)
+
+        return self.data_matrix[self.i_sim(sim)][self.i_fname(fname)]
+
+    def get_filters(self):
+        self.is_filters_loaded()
+        return self.filters
+
+
+
+
+
 class PLOT_LIGHTCURVE():
 
-    def __init__(self, sim, extension):
+    def __init__(self):
+        pass
+        # self.model_fpath = Paths.ppr_sims+self.sim+'/res_mkn/' + 'mkn_model.h5'
+        #
+        # self.filter_fpath = Paths.mkn + Files.filt_at2017gfo
 
-        self.model_fpath = MakePath.outflow(sim, extension) + Files.mkn_model
+
+    # def load_mkn_model(self):
+    #find SFHo_13641364_M0_LK_HR -exec touch '{}' \;
+
+
+    #     dict_model = {}
+    #
+    #     model = h5py.File(self.model_fpath, "r")
+    #     filters_model = []
+    #     for it in model:
+    #         filters_model.append(it)
+    #         dict_model[str(it)] = np.array(model[it])
+    #
+    #     # print('\t Following filters are available in mkn_model.h5: \n\t  {}'.format(filters_model))
+    #
+    #     return dict_model
+    #
+    # def load_obs_filters(self):
+    #
+    #     dict_obs_filters = {}
+    #
+    #     obs_filters = h5py.File(self.filter_fpath, "r")
+    #
+    #     filters_model = []
+    #     for it in obs_filters:
+    #         filters_model.append(it)
+    #         arr = np.array(obs_filters[it])
+    #         # print(arr.shape)
+    #         dict_obs_filters[str(it)] = np.array(obs_filters[it])
+    #
+    #     # print('\t Following filters are available in AT2017gfo.h5: \n\t  {}'.format(filters_model))
+    #
+    #     return dict_obs_filters
+    #
+    @staticmethod
+    def get_min_max_for_all_band(dict_model, band):
+
+        arr = np.zeros(len(dict_model['time'])) # should always be there
+
+        for filter in dict_model.keys():
+            if filter.split('_')[0] == band:
+                arr = np.vstack((arr, dict_model[filter]))
+        #
+        # if len(arr) <= len(dict_model['time']):
+        #     raise ValueError("No min/max found for a band: {}\n Use on of the {}".format(band, dict_model.keys()))
+
+        arr = np.delete(arr, 0, 0)
+
+        maxs = []
+        for i in range(len(arr[0,:])):
+            maxs = np.append(maxs, arr[:,i].max())
+
+        mins = []
+        for i in range(len(arr[0,:])):
+            mins = np.append(mins, arr[:,i].min())
+
+        return mins, maxs
+    #
+    # def plot_for_all_band(self, band, plot_as_band = True, fname = 'tst10'):
+    #
+    #     dict_obs_filters = self.load_obs_filters()
+    #
+    #     dict_model = self.load_mkn_model()
+    #
+    #     # plot models as a continouse band of gray color
+    #     if plot_as_band == True:
+    #         mins, maxs = self.get_min_max_for_all_band(dict_model, band)
+    #         plt.fill_between(dict_model['time'], maxs, mins, alpha=.5, color='gray')
+    #
+    #         for filter in dict_model.keys():
+    #             if filter.split('_')[0] == band and filter in dict_obs_filters.keys():
+    #                 plt.errorbar(dict_obs_filters[filter][:, 0], dict_obs_filters[filter][:, 1],
+    #                              yerr=dict_obs_filters[filter][:, 2],
+    #                              fmt='o', color='black')
+    #     # plot models as separate lines with different colors and labels
+    #     else:
+    #         for filter in dict_model.keys():
+    #             if filter.split('_')[0] == band and filter in dict_obs_filters.keys():
+    #                 plt.errorbar(dict_obs_filters[filter][:, 0], dict_obs_filters[filter][:, 1],
+    #                              yerr=dict_obs_filters[filter][:, 2],
+    #                              fmt='o', color='black', label='filter')
+    #
+    #                 plt.plot(dict_model['time'], dict_model[filter], '-', label=filter)
+    #
+    #     plt.minorticks_on()
+    #     plt.xticks(fontsize=12)
+    #     plt.yticks(fontsize=12)
+    #     plt.tight_layout()
+    #     plt.tick_params(axis='both', which='both', labelleft=True,
+    #                     labelright=False, tick1On=True, tick2On=True,
+    #                     labelsize=12, direction='in')  # labeltop
+    #     plt.gca().invert_yaxis()
+    #     plt.xscale("log")
+    #     # plt.ylim(ymin=1e-5, ymax=2e-1)
+    #     # plt.xlim(xmin=50, xmax=210)
+    #     plt.ylabel("AB magnitude at 40 Mpc", fontsize=12)
+    #     plt.xlabel("time [s]", fontsize=12)
+    #     plt.legend(loc='best', numpoints=1)
+    #
+    #     plt.savefig('{}.png'.format(fname), bbox_inches='tight', dpi=128)
+    #     plt.close()
+    #
+    # def plot_for_several_bands(self, bands, fname):
+    #
+    #     dict_obs_filters = self.load_obs_filters()
+    #
+    #     dict_model = self.load_mkn_model()
+    #
+    #     def plot_for_one_band(ax, band, color):
+    #
+    #         mins, maxs = self.get_min_max_for_all_band(dict_model, band)
+    #         plt.fill_between(dict_model['time'], maxs, mins, alpha=.5, color=color)
+    #
+    #         labeled_bands = []
+    #         for filter in dict_model.keys():
+    #             # print("filter:{} ")
+    #             if filter.split('_')[0] == band and filter in dict_obs_filters.keys():
+    #                 if not band in labeled_bands:
+    #                     ax.errorbar(dict_obs_filters[filter][:, 0], dict_obs_filters[filter][:, 1],
+    #                                 yerr=dict_obs_filters[filter][:, 2],
+    #                                 fmt='o', color=color, label=band)
+    #                 else:
+    #                     ax.errorbar(dict_obs_filters[filter][:, 0], dict_obs_filters[filter][:, 1],
+    #                                 yerr=dict_obs_filters[filter][:, 2],
+    #                                 fmt='o', color=color)
+    #                 labeled_bands.append(band)
+    #
+    #
+    #     plt.figure(figsize=(4.5, 3.6))
+    #     ax = plt.subplot(111)
+    #
+    #     for band in bands:
+    #         # print('band')
+    #         color = color_for_mkn_band(band)
+    #         plot_for_one_band(ax, band, color)
+    #
+    #     plt.minorticks_on()
+    #     plt.xticks(fontsize=12)
+    #     plt.yticks(fontsize=12)
+    #     plt.tight_layout()
+    #     plt.tick_params(axis='both', which='both', labelleft=True, labelright=False,
+    #                     tick1On=True, tick2On=True, labelsize=12, direction='in')  # labeltop
+    #     plt.gca().invert_yaxis()
+    #     plt.xscale("log")
+    #     plt.xlim(xmin=0.2)
+    #     plt.ylim(ymin=25)#, ymax=2e-1)
+    #     # plt.xlim(xmin=50, xmax=210)
+    #     plt.ylabel(r"AB magnitude at 40 Mpc", fontsize=12)
+    #     plt.xlabel(r"time [days]", fontsize=12)
+    #     plt.legend(loc='best', numpoints=1, fontsize=12)
+    #
+    #
+    #     plt.savefig(Paths.ppr_sims+self.sim+'/res_mkn/' + self.gen_set['figname'], bbox_inches='tight', dpi=128)
+    #     plt.close()
+
+
+    def plot_obs_data(self, ax, dic, data):
+
+        dict_obs_filters = data.get_filters()
+        dict_model = data.get_mkn_model(dic['sim'], dic['fname'])
+
+        if dic['obscolor'] == '' or dic['obscolor'] == None:
+            color = color_for_mkn_band(dic["band"])
+        else:
+            color = dic['obscolor']
+
+        labeled_bands = []
+        for filter in dict_model.keys():
+            # print("filter:{} ")dic["obscolor"]
+            if filter.split('_')[0] == dic["band"] and filter in dict_obs_filters.keys():
+                if not dic["band"] in labeled_bands:
+                    ax.errorbar(dict_obs_filters[filter][:, 0], dict_obs_filters[filter][:, 1],
+                                yerr=dict_obs_filters[filter][:, 2],
+                                fmt=dic['marker'], color=color, label=dic["band"])
+                else:
+                    ax.errorbar(dict_obs_filters[filter][:, 0], dict_obs_filters[filter][:, 1],
+                                yerr=dict_obs_filters[filter][:, 2],
+                                fmt=dic['marker'], color=color)
+                labeled_bands.append(dic["band"])
+
+    def plot_simple_lightcurve(self, ax, dic, data):
+
+        # dic = {
+        #     'sim': "DD2_M13641364_M0_LK_SR", 'fname': 'mkn_model.h5',
+        #     'obs': True,
+        #     'band': 'g', 'fillcolor': 'gray', 'obscolor': 'black'
+        # }
+
+        if dic['fillcolor'] == '' or dic['fillcolor'] == None:
+            color = color_for_mkn_band(dic["band"])
+        else:
+            color = dic['fillcolor']
+
+        dict_model = data.get_mkn_model(dic['sim'], dic['fname'])
+        mins, maxs = self.get_min_max_for_all_band(dict_model, dic["band"])
+
+        ax.fill_between(dict_model['time'], maxs, mins, alpha=.5, color=color)
+
+    def plot_main(self, ax, dic, data):
+        if dic["name"] == '-':
+            self.plot_simple_lightcurve(ax, dic, data)
+            if dic['obs']:
+                self.plot_obs_data(ax, dic, data)
+
+# class PLOT_MANY_TASKS:
+#
+#     def __init__(self, o_data, o_base_plots):
+#
+#
+#         self.data = o_data
+#         self.base_plots = o_base_plots
+#
+#         self.gen_set = {
+#             "figdir": Paths.plots + 'overall/',
+#             "figname": "inv_ang_mom_flux.png",
+#             # "figsize": (13.5, 3.5), # <->, |
+#             "figsize": (3.8, 3.5),  # <->, |
+#             "type": "cartesian",
+#             "subplots_adjust_h": 0.2,
+#             "subplots_adjust_w": 0.3,
+#             "fancy_ticks": True,
+#             "minorticks_on": True
+#         }
+#
+#         self.set_plot_dics = []
+#
+#
+#     def set_ncols_nrows(self):
+#
+#         tmp_rows = []
+#         tmp_cols = []
+#
+#         for dic in self.set_plot_dics:
+#             tmp_cols.append(dic['position'][1])
+#             tmp_rows.append(dic['position'][0])
+#
+#         max_row = max(tmp_rows)
+#         max_col = max(tmp_cols)
+#
+#         for row in range(1, max_row):
+#             if not row in tmp_rows:
+#                 raise NameError("Please set vertical plot position in a subsequent order: 1,2,3... not 1,3...")
+#
+#         for col in range(1, max_col):
+#             if not col in tmp_cols:
+#                 raise NameError("Please set horizontal plot position in a subsequent order: 1,2,3... not 1,3...")
+#
+#         print("Set {} rows {} columns (total {}) of plots".format(max_row, max_col, len(self.set_plot_dics)))
+#
+#         return int(max_row), int(max_col)
+#
+#     def set_plot_dics_matrix(self):
+#
+#         plot_dic_matrix = [[0
+#                              for x in range(self.n_rows)]
+#                              for y in range(self.n_cols)]
+#
+#         # get a matrix of dictionaries describing plots (for ease of representation)
+#         for dic in self.set_plot_dics:
+#             col, row = int(dic['position'][1]-1), int(dic['position'][0]-1) # -1 as position starts with 1
+#             # print(col, row)
+#             for n_row in range(self.n_rows):
+#                 for n_col in range(self.n_cols):
+#                     if int(col) == int(n_col) and int(row) == int(n_row):
+#                         plot_dic_matrix[n_col][n_row] = dic
+#                         # print('adding {} {}'.format(col, row))
+#
+#             if isinstance(plot_dic_matrix[col][row], int):
+#                 raise ValueError("Dictionary to found for n_row {} n_col {} in "
+#                                  "creating matrix of dictionaries".format(col, row))
+#
+#         return plot_dic_matrix
+#
+#     def set_plot_matrix(self):
+#
+#         fig = plt.figure(figsize=self.gen_set['figsize'])  # (<->; v)
+#
+#         if self.gen_set['type'] == 'cartesian':
+#             # initializing the matrix with dummy axis objects
+#             sbplot_matrix = [[fig.add_subplot(self.n_rows, self.n_cols, 1)
+#                               for x in range(self.n_rows)]
+#                              for y in range(self.n_cols)]
+#
+#             i = 1
+#             for n_row in range(self.n_rows):
+#                 for n_col in range(self.n_cols):
+#
+#                     if n_col == 0 and n_row == 0:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i)
+#                     elif n_col == 0 and n_row > 0:
+#                         if self.gen_set['sharex']:
+#                             sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+#                                                                           sharex=sbplot_matrix[n_col][0])
+#                         else:
+#                             sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i)
+#                     elif n_col > 0 and n_row == 0:
+#                         if self.gen_set['sharey']:
+#                             sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+#                                                                           sharey=sbplot_matrix[0][n_row])
+#                         else:
+#                             sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i)
+#                     else:
+#                         if self.gen_set['sharex'] and not self.gen_set['sharey']:
+#                             sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+#                                                                           sharex=sbplot_matrix[n_col][0])
+#                         elif not self.gen_set['sharex'] and self.gen_set['sharey']:
+#                             sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+#                                                                           sharey=sbplot_matrix[0][n_row])
+#                         else:
+#                             sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+#                                                                           sharex=sbplot_matrix[n_col][0],
+#                                                                           sharey=sbplot_matrix[0][n_row])
+#
+#                         # sbplot_matrix[n_col][n_row].axes.get_yaxis().set_visible(False)
+#                     # sbplot_matrix[n_col][n_row] = fig.add_subplot(n_rows, n_cols, i)
+#                     i += 1
+#
+#         elif self.gen_set['type'] == 'polar':
+#             # initializing the matrix with dummy axis objects
+#             sbplot_matrix = [[fig.add_subplot(self.n_rows, self.n_cols, 1, projection='polar')
+#                                   for x in range(self.n_rows)]
+#                                   for y in range(self.n_cols)]
+#
+#             i = 1
+#             for n_row in range(self.n_rows):
+#                 for n_col in range(self.n_cols):
+#
+#                     if n_col == 0 and n_row == 0:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+#                     elif n_col == 0 and n_row > 0:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+#                                                                       # sharex=self.sbplot_matrix[n_col][0])
+#                     elif n_col > 0 and n_row == 0:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+#                                                                       # sharey=self.sbplot_matrix[0][n_row])
+#                     else:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+#                                                                       # sharex=self.sbplot_matrix[n_col][0],
+#                                                                       # sharey=self.sbplot_matrix[0][n_row])
+#
+#                         # sbplot_matrix[n_col][n_row].axes.get_yaxis().set_visible(False)
+#                     # sbplot_matrix[n_col][n_row] = fig.add_subplot(n_rows, n_cols, i)
+#                     i += 1
+#         else:
+#             raise NameError("type of the plot is not recognized. Use 'polar' or 'cartesian' ")
+#
+#         return fig, sbplot_matrix
+#
+#     def plot_one_task(self, ax, dic):
+#
+#
+#         if dic["class"] == "lightcurve":
+#             self.base_plots.plot_main(ax, dic, self.data)
+#         else:
+#             raise NameError("dic['class']: '{}' is not recognized"
+#                             .format(dic["class"]))
+#
+#
+#
+#         im = 0
+#         return 0
+#
+#
+#         # if dic["name"] == "corr" or dic["name"] == "int":
+#         #     im = self.plot_x_y_z2d_colormesh(ax, dic)
+#         # elif dic["name"] == "count":
+#         #     self.plot_countours(ax, dic)
+#         #     im = 0
+#         # elif dic["name"] == 'densmode':
+#         #     self.plot_density_mode(ax, dic)
+#         #     im = 0
+#         # else:
+#         #     raise NameError("name:{} is not recognized"
+#         #                     .format(dic["name"]))
+#         #
+#         # # self.time
+#         # return im
+#
+#     def set_plot_title(self, ax, plot_dic):
+#         if plot_dic["title"] != '' and plot_dic["title"] != None:
+#
+#             if plot_dic["title"] == 'it':
+#                 title = plot_dic["it"]
+#             elif plot_dic["title"] == 'time [s]' or \
+#                 plot_dic["title"] == 'time':
+#                 title = "%.3f" % self.data.get_time(plot_dic["it"]) + " [s]"
+#             elif plot_dic["title"] == 'time [ms]':
+#                 title = "%.1f" % (self.data.get_time(plot_dic["it"]) * 1000) + " [ms]"
+#             else:
+#                 title = plot_dic["title"]
+#             ax.title.set_text(r'{}'.format(title))
+#
+#     def plot_images(self):
+#
+#         # initializing the matrix of images for colorbars (if needed)
+#         image_matrix = [[0
+#                         for x in range(self.n_rows)]
+#                         for y in range(self.n_cols)]
+#
+#
+#         for n_row in range(self.n_rows):
+#             for n_col in range(self.n_cols):
+#                 for dic in self.set_plot_dics:
+#                     if n_col + 1 == int(dic['position'][1]) and n_row + 1 == int(dic['position'][0]):
+#                         print("Plotting n_row:{} n_col:{}".format(n_row, n_col))
+#                         ax = self.sbplot_matrix[n_col][n_row]
+#                         # dic = self.plot_dic_matrix[n_col][n_row]
+#                         if isinstance(dic, int):
+#                             Printcolor.yellow("Dictionary for row:{} col:{} not set".format(n_row, n_col))
+#                             self.fig.delaxes(ax)  # delets the axis for empty plot
+#                         else:
+#                             dic = dict(dic)
+#                             im = self.plot_one_task(ax, dic)
+#                             self.set_plot_title(ax, dic)
+#                             if not isinstance(im, int):
+#                                 image_matrix[n_col][n_row] = im
+#
+#                             self.add_fancy_to_ax(ax, dic)
+#                             self.account_for_shared(ax, n_row, n_col)
+#
+#         return image_matrix
+#
+#     def account_for_shared(self, ax, n_row, n_col):
+#
+#         ax.axes.xaxis.set_ticklabels([])
+#         ax.axes.yaxis.set_ticklabels([])
+#
+#         if n_col > 0 and n_row < self.n_rows:
+#             # ax.tick_params(labelbottom=False)
+#             # ax.tick_params(labelleft=False)
+#             #
+#             # ax.set_yticklabels([])
+#             # ax.set_xticklabels([])
+#             #
+#             # ax.get_yaxis().set_ticks([])
+#             #
+#             # ax.set_yticks([])
+#             # ax.set_yticklabels(labels=[])
+#             # # ax.set_yticklabels([]).remove()
+#
+#             # ax.axes.get_xaxis().set_visible(False)
+#             # ax.axes.get_yaxis().set_visible(False)
+#
+#             ax.axes.xaxis.set_ticklabels([])
+#             ax.axes.yaxis.set_ticklabels([])
+#
+#             # ax.tick_params(labelbottom=False)
+#             # ax.tick_params(labelleft=False)
+#             # ax.tick_params(labelright=False)
+#
+#             # ax.get_yaxis().set_visible(False)
+#
+#         if n_col > 0:
+#             ax.set_ylabel('')
+#
+#         if n_row != self.n_rows-1:
+#             ax.set_xlabel('')
+#
+#
+#     def add_fancy_to_ax(self, ax, dic):
+#
+#         if self.gen_set["fancy_ticks"]:
+#             ax.tick_params(axis='both', which='both', labelleft=True,
+#                            labelright=False, tick1On=True, tick2On=True,
+#                            labelsize=12, direction='in')
+#
+#         if "rmylbls" in dic.keys():
+#             if dic["rmylbls"]:
+#                 ax.set_yticklabels([])
+#
+#         if "rmxlbls" in dic.keys():
+#             if dic["rmxlbls"]:
+#                 ax.set_xticklabels([])
+#
+#         if dic["inverty"]:
+#             ax.invert_yaxis()
+#
+#         if dic["xmin"] != None and dic["xmax"] != None:
+#             ax.set_xlim(dic["xmin"], dic["xmax"])
+#         if dic["ymin"] != None and dic["ymax"] != None:
+#             ax.set_ylim(dic["ymin"], dic["ymax"])
+#         if dic["xscale"] == 'log':
+#             ax.set_xscale("log")
+#         if dic["yscale"] == 'log':
+#             ax.set_yscale("log")
+#
+#         ax.set_ylabel(dic["v_n_y"].replace('_', '\_'))
+#         ax.set_xlabel(dic["v_n_x"].replace('_', '\_'))
+#
+#         if dic["legend"]:
+#             ax.legend(fancybox=False, loc='best', shadow=False, fontsize=8)
+#
+#         if self.gen_set["minorticks_on"]:
+#             ax.minorticks_on()
+#
+#     def plot_one_cbar(self, im, dic, n_row, n_col):
+#
+#         if dic["cbar"] != None and dic["cbar"] != '':
+#
+#             location = dic["cbar"].split(' ')[0]
+#             shift_h = float(dic["cbar"].split(' ')[1])
+#             shift_w = float(dic["cbar"].split(' ')[2])
+#             cbar_width = 0.02
+#
+#
+#             if location == 'right':
+#                 ax_to_use = self.sbplot_matrix[-1][n_row]
+#                 pos1 = ax_to_use.get_position()
+#                 pos2 = [pos1.x0 + pos1.width + shift_h,
+#                         pos1.y0,
+#                         cbar_width,
+#                         pos1.height]
+#             elif location == 'left':
+#                 ax_to_use = self.sbplot_matrix[-1][n_row]
+#                 pos1 = ax_to_use.get_position()
+#                 pos2 = [pos1.x0 - pos1.width - shift_h,
+#                         pos1.y0,
+#                         cbar_width,
+#                         pos1.height]
+#             elif location == 'bottom':
+#                 ax_to_use = self.sbplot_matrix[n_col][-1]
+#                 pos1 = ax_to_use.get_position()
+#                 pos2 = [pos1.x0,
+#                         pos1.y0 - pos1.height + shift_w,
+#                         cbar_width,
+#                         pos1.height]
+#             else:
+#                 raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
+#                                 .format(location))
+#
+#             cax1 = self.fig.add_axes(pos2)
+#             if location == 'right':
+#                 cbar = plt.colorbar(im, cax=cax1, extend='both')#, format='%.1e')
+#             elif location == 'left':
+#                 cbar = plt.colorbar(im, cax=cax1, extend='both')#, format='%.1e')
+#                 cax1.yaxis.set_ticks_position('left')
+#                 cax1.yaxis.set_label_position('left')
+#             else:
+#                 raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
+#                                 .format(location))
+#             cbar.ax.set_title(r"{}".format(str(dic["v_n"]).replace('_', '\_')))
+#
+#     def plot_colobars(self):
+#
+#         for n_row in range(self.n_rows):
+#             for n_col in range(self.n_cols):
+#                 for dic in self.set_plot_dics:
+#                     if n_col + 1 == int(dic['position'][1]) and n_row + 1 == int(dic['position'][0]):
+#                         print("Colobar for n_row:{} n_col:{}".format(n_row, n_col))
+#                         # ax  = self.sbplot_matrix[n_col][n_row]
+#                         # dic = self.plot_dic_matrix[n_col][n_row]
+#                         im  = self.image_matrix[n_col][n_row]
+#                         if isinstance(dic, int):
+#                             Printcolor.yellow("Dictionary for row:{} col:{} not set".format(n_row, n_col))
+#                         else:
+#                             self.plot_one_cbar(im, dic, n_row, n_col)
+#
+#
+#         # for n_row in range(self.n_rows):
+#         #     for n_col in range(self.n_cols):
+#         #         print("Colobar for n_row:{} n_col:{}".format(n_row, n_col))
+#         #         # ax  = self.sbplot_matrix[n_col][n_row]
+#         #         dic = self.plot_dic_matrix[n_col][n_row]
+#         #         im  = self.image_matrix[n_col][n_row]
+#         #         if isinstance(dic, int):
+#         #             Printcolor.yellow("Dictionary for row:{} col:{} not set".format(n_row, n_col))
+#         #         else:
+#         #             self.plot_one_cbar(im, dic, n_row, n_col)
+#
+#     def save_plot(self):
+#
+#         plt.subplots_adjust(hspace=self.gen_set["subplots_adjust_h"])
+#         plt.subplots_adjust(wspace=self.gen_set["subplots_adjust_w"])
+#         # plt.tight_layout()
+#         plt.savefig('{}{}'.format(self.gen_set["figdir"], self.gen_set["figname"]),
+#                     bbox_inches='tight', dpi=128)
+#         plt.close()
+#
+#     def main(self):
+#
+#         # initializing the n_cols, n_rows
+#         self.n_rows, self.n_cols = self.set_ncols_nrows()
+#         # initializing the matrix of dictionaries of the
+#         self.plot_dic_matrix = self.set_plot_dics_matrix()
+#         # initializing the axis matrix (for all subplots) and image matrix fo colorbars
+#         self.fig, self.sbplot_matrix = self.set_plot_matrix()
+#         # plotting
+#         self.image_matrix = self.plot_images()
+#         # adding colobars
+#         self.plot_colobars()
+#
+#
+#         # saving the result
+#         self.save_plot()
+
+
+
+
+
+
+
+
+
+
+
+
+class PLOT_LIGHTCURVE_OLD:
+
+    def __init__(self, sim):
+
+        self.gen_set = {
+            'figname': 'mkn.png'
+        }
+
+        self.sim = sim
+
+        self.model_fpath = Paths.ppr_sims+self.sim+'/res_mkn/' + 'mkn_model.h5'
 
         self.filter_fpath = Paths.mkn + Files.filt_at2017gfo
 
@@ -777,7 +1750,8 @@ class PLOT_LIGHTCURVE():
         plt.xlabel(r"time [days]", fontsize=12)
         plt.legend(loc='best', numpoints=1, fontsize=12)
 
-        plt.savefig('{}{}.png'.format(Paths.plots, fname), bbox_inches='tight', dpi=128)
+
+        plt.savefig(Paths.ppr_sims+self.sim+'/res_mkn/' + self.gen_set['figname'], bbox_inches='tight', dpi=128)
         plt.close()
 
 
@@ -2113,15 +3087,259 @@ class BEST_SIM_KILONOVA(SIM_KILONOVA):
         self.plot_for_several_bands(['g', 'z', 'Ks'], fname)
 
 
-if __name__ == '__main__':
+
+""" --- TASK SPECIFIC FUNCTIONS --- """
+
+def plot_many_lightcuves():
+
+    sim = "DD2_M13641364_M0_SR"
+
+    o_data = LOAD_LIGHTCURVES(sim)
+    o_task_plots = PLOT_LIGHTCURVE()
+    o_plots = PLOT_MANY_TASKS(o_data, o_task_plots)
+
+    o_plots.gen_set["figdir"] = Paths.ppr_sims + sim + "/res_mkn/"
+    o_plots.gen_set["figname"]  = "mkn.png"
+    o_plots.gen_set["figsize"] =  (9.1, 9.1)  # <->, |]
+    o_plots.gen_set["subplots_adjust_h"] = 0.0
+    o_plots.gen_set["subplots_adjust_w"] = 0.0
+    o_plots.gen_set["sharex"] = True
+    o_plots.gen_set["sharey"] = True
 
 
-    make_model = COMPUTE_LIGHTCURVE("DD2_M13641364_M0_SR")
+    dd2_blue_dic = {
+        'class': 'lightcurve', 'name': '-', 'sim': "DD2_M13641364_M0_SR", 'fname': 'mkn_model.h5',
+        'position': (1, 1), 'obs': True,
+        'band': 'g', 'fillcolor': 'gray', 'obscolor': 'black', 'marker': 'o',
+        'title': 'DD2', 'cbar': None,
+        'v_n_x': r"time [days]", 'v_n_y': r"AB magnitude at 40 Mpc", 'v_n': None,
+        'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+        'xscale': 'log', 'yscale': "log", 'inverty': True,
+        'fancy_ticks': True, 'legend': True, 'rmylbls': False
+    }
+
+    dd2_green_dic = {
+        'class': 'lightcurve', 'name': '-', 'sim': "DD2_M13641364_M0_SR", 'fname': 'mkn_model.h5',
+        'position': (2, 1), 'obs': True,
+        'band': 'r', 'fillcolor': 'gray', 'obscolor': 'black', 'marker': 'o',
+        'title': None, 'cbar': None,
+        'v_n_x': r"time [days]", 'v_n_y': r"AB magnitude at 40 Mpc", 'v_n': None,
+        'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+        'xscale': 'log', 'yscale': "log", 'inverty': True,
+        'fancy_ticks': True, 'legend': True, 'rmylbls': False
+    }
+
+    dd2_yellow_dic = {
+        'class': 'lightcurve', 'name': '-', 'sim': "DD2_M13641364_M0_SR", 'fname': 'mkn_model.h5',
+        'position': (3, 1), 'obs': True,
+        'band': 'z', 'fillcolor': 'gray', 'obscolor': 'black', 'marker': 'o',
+        'title': None, 'cbar': None,
+        'v_n_x': r"time [days]", 'v_n_y': r"AB magnitude at 40 Mpc", 'v_n': None,
+        'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+        'xscale': 'log', 'yscale': "log", 'inverty': True,
+        'fancy_ticks': True, 'legend': True, 'rmylbls': False
+    }
+
+
+    ls220_blue_dic = {
+        'class': 'lightcurve', 'name': '-', 'sim': "LS220_M13641364_M0_SR", 'fname': 'mkn_model.h5',
+        'position': (1, 2), 'obs': True,
+        'band': 'g', 'fillcolor': 'gray', 'obscolor': 'black', 'marker': 'o',
+        'title': 'LS220', 'cbar': None,
+        'v_n_x': r"time [days]", 'v_n_y': r"AB magnitude at 40 Mpc", 'v_n': None,
+        'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+        'xscale': 'log', 'yscale': "log", 'inverty': True,
+        'fancy_ticks': True, 'legend': True, 'rmylbls': True
+    }
+
+    ls220_green_dic = {
+        'class': 'lightcurve', 'name': '-', 'sim': "LS220_M13641364_M0_SR", 'fname': 'mkn_model.h5',
+        'position': (2, 2), 'obs': True,
+        'band': 'r', 'fillcolor': 'gray', 'obscolor': 'black', 'marker': 'o',
+        'title': None, 'cbar': None,
+        'v_n_x': r"time [days]", 'v_n_y': r"AB magnitude at 40 Mpc", 'v_n': None,
+        'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+        'xscale': 'log', 'yscale': "log", 'inverty': True,
+        'fancy_ticks': True, 'legend': True, 'rmylbls': True
+    }
+
+    ls220_yellow_dic = {
+        'class': 'lightcurve', 'name': '-', 'sim': "LS220_M13641364_M0_SR", 'fname': 'mkn_model.h5',
+        'position': (3, 2), 'obs': True,
+        'band': 'z', 'fillcolor': 'gray', 'obscolor': 'black', 'marker': 'o',
+        'title': None, 'cbar': None,
+        'v_n_x': r"time [days]", 'v_n_y': r"AB magnitude at 40 Mpc", 'v_n': None,
+        'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+        'xscale': 'log', 'yscale': "log", 'inverty': True,
+        'fancy_ticks': True, 'legend': True, 'rmylbls': True
+    }
+
+
+    sly4_blue_dic = {
+        'class': 'lightcurve', 'name': '-', 'sim': "SLy4_M13641364_M0_SR", 'fname': 'mkn_model.h5',
+        'position': (1, 3), 'obs': True,
+        'band': 'g', 'fillcolor': 'gray', 'obscolor': 'black', 'marker': 'o',
+        'title': 'SLy4', 'cbar': None,
+        'v_n_x': r"time [days]", 'v_n_y': r"AB magnitude at 40 Mpc", 'v_n': None,
+        'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+        'xscale': 'log', 'yscale': "log", 'inverty': True,
+        'fancy_ticks': True, 'legend': True, 'rmylbls': True
+    }
+
+    sly4_green_dic = {
+        'class': 'lightcurve', 'name': '-', 'sim': "SLy4_M13641364_M0_SR", 'fname': 'mkn_model.h5',
+        'position': (2, 3), 'obs': True,
+        'band': 'r', 'fillcolor': 'gray', 'obscolor': 'black', 'marker': 'o',
+        'title': None, 'cbar': None,
+        'v_n_x': r"time [days]", 'v_n_y': r"AB magnitude at 40 Mpc", 'v_n': None,
+        'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+        'xscale': 'log', 'yscale': "log", 'inverty': True,
+        'fancy_ticks': True, 'legend': True, 'rmylbls': True
+    }
+
+    sly4_yellow_dic = {
+        'class': 'lightcurve', 'name': '-', 'sim': "SLy4_M13641364_M0_SR", 'fname': 'mkn_model.h5',
+        'position': (3, 3), 'obs': True,
+        'band': 'z', 'fillcolor': 'gray', 'obscolor': 'black', 'marker': 'o',
+        'title': None, 'cbar': None,
+        'v_n_x': r"time [days]", 'v_n_y': r"AB magnitude at 40 Mpc", 'v_n': None,
+        'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+        'xscale': 'log', 'yscale': "log", 'inverty': True,
+        'fancy_ticks': True, 'legend': True, 'rmylbls': True
+    }
+
+
+
+    o_plots.set_plot_dics = [dd2_blue_dic,dd2_green_dic,dd2_yellow_dic,
+                             ls220_blue_dic,ls220_green_dic,ls220_yellow_dic,
+                             sly4_blue_dic,sly4_green_dic,sly4_yellow_dic]
+
+    o_plots.main()
+
+    exit(1)
+
+
+def compute_for_3_simulations_fully_informed():
+
+
+
+    sim = "DD2_M13641364_M0_SR"
+
+
+    make_model = COMPUTE_LIGHTCURVE(sim)
+    make_model.set_wind_iso_aniso = "aniso"
+    # make_model.ejecta_vars["wind"]['xi_disk'] = 0.2
+    # make_model.ejecta_vars["wind"]['central_vel'] = 0.08
+    # make_model.ejecta_vars["wind"]['high_lat_op'] = 0.5
+    # make_model.ejecta_vars["wind"]['low_lat_op'] = 5.
+
+    make_model.set_secular_iso_aniso = "aniso"
+    # make_model.ejecta_vars["secular"]['xi_disk'] = 0.2
+    # make_model.ejecta_vars["secular"]['central_vel'] = 0.08
+    # make_model.ejecta_vars["secular"]['central_op'] = 5.0
+
     make_model.compute_save_lightcurve(write_output=True)
+
+    " --- --- ---"
+
+    sim = "LS220_M13641364_M0_SR"
+    make_model = COMPUTE_LIGHTCURVE(sim)
+    make_model.set_wind_iso_aniso = "aniso"
+    # make_model.ejecta_vars["wind"]['xi_disk'] = 0.2
+    # make_model.ejecta_vars["wind"]['central_vel'] = 0.08
+    # make_model.ejecta_vars["wind"]['high_lat_op'] = 0.5
+    # make_model.ejecta_vars["wind"]['low_lat_op'] = 5.
+
+    make_model.set_secular_iso_aniso = "aniso"
+    # make_model.ejecta_vars["secular"]['xi_disk'] = 0.2
+    # make_model.ejecta_vars["secular"]['central_vel'] = 0.08
+    # make_model.ejecta_vars["secular"]['central_op'] = 5.0
+
+    make_model.compute_save_lightcurve(write_output=True)
+
+    " --- --- ---"
+
+    sim = "SLy4_M13641364_M0_SR"
+    make_model = COMPUTE_LIGHTCURVE(sim)
+    make_model.set_wind_iso_aniso = "aniso"
+    # make_model.ejecta_vars["wind"]['xi_disk'] = 0.2
+    # make_model.ejecta_vars["wind"]['central_vel'] = 0.08
+    # make_model.ejecta_vars["wind"]['high_lat_op'] = 0.5
+    # make_model.ejecta_vars["wind"]['low_lat_op'] = 5.
+
+    make_model.set_secular_iso_aniso = "aniso"
+    # make_model.ejecta_vars["secular"]['xi_disk'] = 0.2
+    # make_model.ejecta_vars["secular"]['central_vel'] = 0.08
+    # make_model.ejecta_vars["secular"]['central_op'] = 5.0
+
+    make_model.compute_save_lightcurve(write_output=True)
+
+    exit(1)
+
+
+def compute_for_3_simulations_varius_component_set():
+
+
+    sims = ["DD2_M13641364_M0_SR",
+            "LS220_M13641364_M0_SR",
+            "SLy4_M13641364_M0_SR"]
+
+    for sim in sims:
+
+        make_model = COMPUTE_LIGHTCURVE(sim)
+        make_model.output_fname             = 'mkn_model1.h5'
+        make_model.set_dyn_iso_aniso        = "aniso"
+        make_model.set_psdyn_iso_aniso      = ""
+        make_model.set_wind_iso_aniso       = ""
+        make_model.set_secular_iso_aniso    = ""
+        make_model.set_par_war()
+        make_model.compute_save_lightcurve(write_output=True)
+
+        make_model = COMPUTE_LIGHTCURVE(sim)
+        make_model.output_fname             = 'mkn_model2.h5'
+        make_model.set_dyn_iso_aniso        = "aniso"
+        make_model.set_psdyn_iso_aniso      = "aniso"
+        make_model.set_wind_iso_aniso       = ""
+        make_model.set_secular_iso_aniso    = ""
+        make_model.set_par_war()
+        make_model.compute_save_lightcurve(write_output=True)
+
+        make_model = COMPUTE_LIGHTCURVE(sim)
+        make_model.output_fname             = 'mkn_model3.h5'
+        make_model.set_dyn_iso_aniso        = "aniso"
+        make_model.set_psdyn_iso_aniso      = "aniso"
+        make_model.set_wind_iso_aniso       = "aniso"
+        make_model.set_secular_iso_aniso    = ""
+        make_model.set_par_war()
+        make_model.compute_save_lightcurve(write_output=True)
+
+        make_model = COMPUTE_LIGHTCURVE(sim)
+        make_model.output_fname             = 'mkn_model4.h5'
+        make_model.set_dyn_iso_aniso        = "aniso"
+        make_model.set_psdyn_iso_aniso      = "aniso"
+        make_model.set_wind_iso_aniso       = "aniso"
+        make_model.set_secular_iso_aniso    = "aniso"
+        make_model.set_par_war()
+        make_model.compute_save_lightcurve(write_output=True)
+
+    exit(1)
+# compute_for_3_simulations_varius_component_set()
+
+if __name__ == '__main__':
+    pass
+    # compute_for_3_simulations_fully_informed()
+    # compute_for_3_simulations_varius_component_set()
+
+
+    # plot_many_lightcuves()
+
+    #
+    # make_model = COMPUTE_LIGHTCURVE("DD2_M13641364_M0_SR")
+    # make_model.compute_save_lightcurve(write_output=True)
     # make_model.plot_test_smooth_profile('_0')
 
-    plot_model = PLOT_LIGHTCURVE("DD2_M13641364_M0_SR", '_0')
-    plot_model.plot_for_several_bands(['g', 'r', 'z'], "tst_mkn")
+    # plot_model = PLOT_LIGHTCURVE_OLD("DD2_M13641364_M0_SR")
+    # plot_model.plot_for_several_bands(['g', 'r', 'z'], "tst_mkn")
 
 # if __name__ == '__main__':
 #

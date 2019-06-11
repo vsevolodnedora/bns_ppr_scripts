@@ -33,6 +33,8 @@ path.append('modules/')
 from _curses import raw
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import ticker
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import rc
 plt.rc('text', usetex=True)
@@ -50,6 +52,7 @@ import os.path
 import cPickle
 import time
 import copy
+import click
 import h5py
 import csv
 import os
@@ -79,9 +82,9 @@ import time
 """ --- --- SETUP --- --- """
 
 def setup():
-    rho_const = 6.176269145886162e+17
+    rho_const = 6.176269145886162e+17 # 
 
-    tasks_for_rl = {
+    tasks_for_rl = { # neutron star in GEO units 1.6191004634e-5
         "mask": {'rm_rl': True, 'rho': [6.e4 / rho_const, 1.e13 / rho_const], 'lapse': [0.15, 1.]},  # rho in cgs
 
         # "task1::correlation": [
@@ -155,13 +158,13 @@ class CYLINDRICAL_GRID:
 
 
 
-        self.grid_type = grid_info["type"]
+        self.grid_type = "cyl"
 
         # self.carpet_grid = carpet_grid
 
         self.list_int_grid_v_ns = ["x_cyl", "y_cyl", "z_cyl",
-                          "r_cyl", "phi_cyl",
-                          "dr_cyl", "dphi_cyl", "dz_cyl"]
+                                  "r_cyl", "phi_cyl",
+                                  "dr_cyl", "dphi_cyl", "dz_cyl"]
 
         print('-' * 25 + 'INITIALIZING CYLINDRICAL GRID' + '-' * 25)
 
@@ -254,6 +257,23 @@ class CYLINDRICAL_GRID:
             raise NameError("v_n: {} not recogized in grid. Available:{}"
                             .format(v_n, self.list_int_grid_v_ns))
 
+
+    def save_cyl_grid(self, sim):
+
+        grid_type = self.grid_type
+
+        path = Paths.ppr_sims + sim + "/res_3d/"
+        outfile = h5py.File(path + self.grid_type + '_grid.h5', "w")
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # print("Saving grid...")
+        for v_n in self.list_int_grid_v_ns:
+            outfile.create_dataset(v_n, data=self.get_int_grid(v_n))
+        outfile.close()
+
+
 class FORMULAS:
 
     def __init__(self):
@@ -315,6 +335,10 @@ class FORMULAS:
     def theta(r, z):
         # r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
         return np.arccos(z/r)
+
+    @staticmethod
+    def phi(x, y):
+        return np.arctan2(y, x)
 
     @staticmethod
     def dens_unb_geo(u_0, rho, w_lorentz, vol):
@@ -484,18 +508,13 @@ class COMPUTE_STORE(LOAD_PROFILE):
     def __init__(self, fname):
         LOAD_PROFILE.__init__(self, fname)
 
-        rho_const = 6.176269145886162e+17
-        self.task_setup = {'rm_rl': True, # REMOVE previouse ref. level from the next
-                           'rho': [6.e4 / rho_const, 1.e13 / rho_const], # REMOVE atmo and NS
-                           'lapse': [0.15, 1.]} # remove apparent horizon
-
         self.list_comp_v_ns = [
             "density", "vup", "metric", "shift",
             "enthalpy", "shvel", "u_0",
             "vlow", "vphi", "vr",
             "dens_unb_geo", "dens_unb_bern", "dens_unb_garch",
             "ang_mom", "ang_mom_flux",
-            "theta", "r" # assumes cylindircal coordinates. r = x^2 + y^2
+            "theta", "r", "phi" # assumes cylindircal coordinates. r = x^2 + y^2
         ]
 
         self.list_all_v_ns = self.list_prof_v_ns + \
@@ -592,6 +611,10 @@ class COMPUTE_STORE(LOAD_PROFILE):
             arr = FORMULAS.r(self.get_comp_data(rl, "x"),
                              self.get_comp_data(rl, "y"))
 
+        elif v_n == "phi":
+            arr = FORMULAS.phi(self.get_comp_data(rl, "x"),
+                               self.get_comp_data(rl, "y"))
+
         elif v_n == 'theta':
             arr = FORMULAS.theta(self.get_comp_data(rl, "r"),
                                  self.get_comp_data(rl, "z"))
@@ -667,6 +690,11 @@ class MASK_STORE(COMPUTE_STORE):
     def __init__(self, fname):
         COMPUTE_STORE.__init__(self, fname)
 
+        rho_const = 6.176269145886162e+17
+        self.mask_setup = {'rm_rl': True,  # REMOVE previouse ref. level from the next
+                           'rho': [6.e4 / rho_const, 1.e13 / rho_const],  # REMOVE atmo and NS
+                           'lapse': [0.15, 1.]} # remove apparent horizon
+
         self.mask_matrix = [np.ones(0, dtype=bool) for x in range(self.nlevels)]
 
         self.list_mask_v_n = ["x", "y", "z"]
@@ -685,7 +713,7 @@ class MASK_STORE(COMPUTE_STORE):
             y.append(self.get_comp_data(rl, "y")[3:-3, 3:-3, 3:-3])
             z.append(self.get_comp_data(rl, "z")[3:-3, 3:-3, 3:-3])
             mask = np.ones(x[ii].shape, dtype=bool)
-            if ii > 0 and self.task_setup["rm_rl"]:
+            if ii > 0 and self.mask_setup["rm_rl"]:
                 x_ = (x[ii][:, :, :] <= x[ii - 1][:, 0, 0].max()) & (
                         x[ii][:, :, :] >= x[ii - 1][:, 0, 0].min())
                 y_ = (y[ii][:, :, :] <= y[ii - 1][0, :, 0].max()) & (
@@ -694,14 +722,14 @@ class MASK_STORE(COMPUTE_STORE):
                         z[ii][:, :, :] >= z[ii - 1][0, 0, :].min())
                 mask = mask & np.invert((x_ & y_ & z_))
 
-            for v_n in self.task_setup.keys()[1:]:
+            for v_n in self.mask_setup.keys()[1:]:
                 self.check_v_n(v_n)
-                if len(self.task_setup[v_n]) != 2:
+                if len(self.mask_setup[v_n]) != 2:
                     raise NameError("Error. 2 values are required to set a limit. Give {} for {}"
-                                     .format(self.task_setup[v_n], v_n))
+                                    .format(self.mask_setup[v_n], v_n))
                 arr_1 = self.get_comp_data(rl, v_n)[3:-3, 3:-3, 3:-3]
-                min_val = float(self.task_setup[v_n][0])
-                max_val = float(self.task_setup[v_n][1])
+                min_val = float(self.mask_setup[v_n][0])
+                max_val = float(self.mask_setup[v_n][1])
                 mask_i = (arr_1 > min_val) & (arr_1 < max_val)
                 mask = mask & mask_i
                 del arr_1
@@ -792,6 +820,19 @@ class MAINMETHODS_STORE(MASK_STORE):
         self.corr_task_dic_inv_ang_mom_flux_dens_unb_bern = [
             {"v_n": "inv_ang_mom_flux", "points": 500, "scale": "log", "min":1e-12},  # not in CGS :^
             {"v_n": "dens_unb_bern", "edges": 10.0 ** np.linspace(-12., -6., 500)}
+        ]
+
+        self.corr_task_dic_r_phi = [
+            {"v_n": "r", "edges": np.linspace(0, 50, 500)},
+            {"v_n": "phi", "edges": np.linspace(-np.pi, np.pi, 500)},
+        ]
+
+        # -- 3D
+
+        self.corr_task_dic_r_phi_ang_mom_flux = [
+            {"v_n": "r", "edges": np.linspace(0, 100, 50)},
+            {"v_n": "phi", "edges": np.linspace(-np.pi, np.pi, 300)},
+            {"v_n": "ang_mom_flux", "points": 500, "scale": "log", "min": 1e-12}
         ]
 
     def get_total_mass(self, multiplier=2., save=False):
@@ -911,10 +952,6 @@ class MAINMETHODS_STORE(MASK_STORE):
                                  for y in range(len(self.list_all_v_ns))]
         instance.mask_matrix = [np.ones(0, dtype=bool) for x in range(self.nlevels)]
 
-
-
-
-
 class INTERPOLATE_STORE(MAINMETHODS_STORE):
 
     def __init__(self, fname, sim, grid_object):
@@ -999,7 +1036,6 @@ class INTERPOLATE_STORE(MAINMETHODS_STORE):
         self.is_data_interpolated(v_n)
         return self.int_data_matrix[self.i_int_v_n(v_n)]
 
-
 class INTMETHODS_STORE(INTERPOLATE_STORE):
 
     def __init__(self, fname, sim, grid_object):
@@ -1021,46 +1057,46 @@ class INTMETHODS_STORE(INTERPOLATE_STORE):
             outfile.create_dataset(v_n, data=self.new_grid.get_int_grid(v_n))
         outfile.close()
 
-
-    def save_int_v_n(self, v_n):
+    def save_int_v_n(self, v_n, overwrite=False):
 
         path = Paths.ppr_sims + self.sim + "/res_3d/" + str(self.iteration) + '/'
-        grid_type = self.new_grid.grid_info['type']
-        outfile = h5py.File(path + grid_type + '_' + v_n + '.h5', "w")
-        outfile.create_dataset(v_n, data=self.get_int(v_n))
-        outfile.close()
+        if not os.path.isdir(path):
+            os.mkdir(path)
+        grid_type = self.new_grid.grid_type
+
+        fname = path + grid_type + '_' + v_n + '.h5'
+
+        if os.path.isfile(fname):
+            if overwrite:
+                print("File: {} already exists -- overwriting".format(fname))
+                os.remove(fname)
+                outfile = h5py.File(fname, "w")
+                outfile.create_dataset(v_n, data=self.get_int(v_n))
+                outfile.close()
+            else:
+                print("File: {} already exists -- skipping".format(fname))
+        else:
+            outfile = h5py.File(fname, "w")
+            outfile.create_dataset(v_n, data=self.get_int(v_n))
+            outfile.close()
 
 
-""" --- --- LOADING & PLOTTING RESILTS --- --- """
+
+
+
+""" --- --- LOADING & PostPROCESSING RESILTS --- --- """
 
 class LOAD_RES_CORR:
 
     def __init__(self, sim):
 
         self.sim = sim
-        fname = '*.h5'
-        root = Paths.gw170817+ sim +'/profiles/3d/'
-        files = locate(fname, root=root, followlinks=False)
-        iterations = []
+        self.list_iterations = get_list_iterationsfrom_res_3d(sim)
+        self.times = interpoate_time_form_it(self.list_iterations, Paths.gw170817+sim+'/')
 
-        if len(files) == 0:
-            raise NameError("No iterations found in the root:{}".format(root))
-        if os.path.isfile(root+"ittime.txt"):
-            list_iterations, self.times = np.loadtxt(root+"ittime.txt", usecols=(0, 1), unpack=True)
-            self.list_iterations = list(list_iterations)
-        else:
-            for file_ in files:
-                iterations.append(int(str(file_.split('/')[-1]).split('.h5')[0]))
-            self.times = interpoate_time_form_it(iterations, Paths.gw170817+sim+'/')
-            self.list_iterations = iterations
-
-        # self.list_corr_v_ns = ["temp_Ye", "rho_Ye", "rho_theta", "rho_r",
-        #                        "rho_ang_mom", "rho_ang_mom_flux", "rho_dens_unb_bern",
-        #                        "ang_mom_flux_dens_unb_bern", "ang_mom_flux_theta"]
-
-        self.list_corr_v_ns = ["temp", "Ye", "rho", "theta", "r",
+        self.list_corr_v_ns = ["temp", "Ye", "rho", "theta", "r", "phi",
                                "ang_mom", "ang_mom_flux", "dens_unb_bern",
-                               "inv_ang_mom_flux"
+                               "inv_ang_mom_flux", 'vr'
                                ]
 
         self.corr_matrix = [[np.zeros(0,)
@@ -1320,425 +1356,41 @@ class LOAD_RES_CORR:
         return self.times[self.list_iterations.index(it)]
 
 
-class RES(LOAD_RES_CORR):
+    def load_corr3d(self, it, v_n_x, v_n_y, v_n_z):
 
-    def __init__(self, sim):
-        LOAD_RES_CORR.__init__(self, sim)
+        v_n_x = str(v_n_x)
+        v_n_y = str(v_n_y)
+        v_n_z = str(v_n_z)
 
+        self.check_v_n(v_n_x)
+        self.check_v_n(v_n_y)
+        self.check_v_n(v_n_z)
 
+        fpath_direct = Paths.ppr_sims + self.sim + "/res_3d/" + str(it) + "/corr_" + v_n_x + '_' + v_n_y + '_' + v_n_z + ".h5"
+        if not os.path.isfile(fpath_direct):
+            raise IOError("Correlation files not found:\n{}".format(fpath_direct))
 
+        dfile = h5py.File(fpath_direct, "r")
 
+        edge_x = np.array(dfile[v_n_x])
+        edge_y = np.array(dfile[v_n_y])
+        edge_z = np.array(dfile[v_n_z])
+        arr_x = 0.5 * (edge_x[1:] + edge_x[:-1])  # from edges to center of bins
+        arr_y = 0.5 * (edge_y[1:] + edge_y[:-1])
+        arr_z = 0.5 * (edge_z[1:] + edge_z[:-1])
 
-class PLOT_TASK(RES):
+        mass = np.array(dfile["mass"])
 
-    def __init__(self, sim):
-        RES.__init__(self, sim)
+        print("arr_x.shape {}".format(arr_x.shape))
+        print("arr_y.shape {}".format(arr_y.shape))
+        print("arr_z.shape {}".format(arr_z.shape))
+        print("mass.shape {}".format(mass.shape))
 
-    def plot_correlation(self, ax, dic):
+        return arr_x, arr_y, arr_z, mass
 
-        table = self.get_res_corr(dic["it"], dic["v_n_x"], dic["v_n_y"])
+        # exit(1)
 
-        table = np.array(table)
-        # table[0, 1:] = table[0, 1:] * 6.176269145886162e+17
 
-        x_arr = table[0,1:] #* 6.176269145886162e+17
-        y_arr = table[1:,0]
-        z_arr = table[1:,1:]
-
-        # normalization
-        z_arr = z_arr/np.sum(z_arr)
-
-        # special treatment
-        if dic["v_n_x"] == "theta": x_arr = 90 - (180 * x_arr / np.pi)
-        if dic["v_n_y"] == "theta": y_arr = 90 - (180 * y_arr / np.pi)
-
-        if dic["v_n_x"] == "rho": x_arr *= 6.176269145886162e+17
-        if dic["v_n_y"] == "rho": y_arr *= 6.176269145886162e+17
-
-
-
-        # limits
-        if dic["xmin"] != None and dic["xmax"] != None:
-            ax.set_xlim(dic["xmin"], dic["xmax"])
-
-        if dic["ymin"] != None and dic["ymax"] != None:
-            ax.set_ylim(dic["ymin"], dic["ymax"])
-
-        if dic["vmin"] == None: dic["vmin"] = z_arr.min()
-        if dic["vmax"] == None: dic["vmax"] = z_arr.max()
-
-        if dic["norm"] == "norm":
-            norm = Normalize(vmin=dic["vmin"], vmax=dic["vmax"])
-        elif dic["norm"] == "log":
-            norm = LogNorm(vmin=dic["vmin"], vmax=dic["vmax"])
-        else:
-            raise NameError("unrecognized norm: {} in task {}"
-                            .format(dic["norm"], dic["v_n"]))
-
-        ax.set_xlabel(dic["v_n_x"].replace('_', '\_'))
-        ax.set_ylabel(dic["v_n_y"].replace('_', '\_'))
-
-        if dic["xscale"] == 'log':
-            ax.set_xscale("log")
-        if dic["yscale"] == 'log':
-            ax.set_yscale("log")
-
-        im = ax.pcolormesh(x_arr, y_arr, z_arr, norm=norm, cmap=dic["cmap"])
-        im.set_rasterized(True)
-
-        return im
-
-
-class PLOT_MANY_TASKS(PLOT_TASK):
-
-    def __init__(self, sim):
-        RES.__init__(self, sim)
-
-        it = 1818738
-
-        self.gen_set = {
-            "figdir": Paths.ppr_sims + self.sim + "/res_3d/{}/".format(it),
-            "figname": "inv_ang_mom_flux.png",
-            # "figsize": (13.5, 3.5), # <->, |
-            "figsize": (3.8, 3.5),  # <->, |
-            "type": "cartesian",
-            "subplots_adjust_h": 0.2,
-            "subplots_adjust_w": 0.3
-        }
-
-        self.set_plot_dics = []
-
-        corr_dic_temp_Ye = { # relies on the "get_res_corr(self, it, v_n): " method of data object
-            'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar': 'right .05 .0',
-            'it': 2237972, 'v_n_x': 'temp', 'v_n_y': 'Ye', 'v_n': 'mass',
-            'xmin': 2., 'xmax': 15., 'ymin': 0., 'ymax': 0.2, 'vmin': 1e-4, 'vmax': None,
-            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
-        }
-        # self.set_plot_dics.append(corr_dic_temp_Ye)
-
-        corr_dic_rho_ang_mom = { # relies on the "get_res_corr(self, it, v_n): " method of data object
-            'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar':  'right .05 .0',
-            'it': 761856, 'v_n_x': 'rho', 'v_n_y': 'ang_mom', 'v_n': 'mass',
-            'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'vmin': 1e-8, 'vmax': None,
-            'xscale':'log', 'yscale':'log',
-            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
-        }
-        # self.set_plot_dics.append(corr_dic_rho_ang_mom)
-
-        corr_dic_rho_dens_unb_bern = { # relies on the "get_res_corr(self, it, v_n): " method of data object
-            'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar':  None, #  'right .05 .0',
-            'it': 1081344, 'v_n_x': 'rho', 'v_n_y': 'dens_unb_bern', 'v_n': 'mass',
-            'xmin': None, 'xmax': None, 'ymin': None, 'ymax': 1e-3, 'vmin': 1e-7, 'vmax': None,
-            'xscale':'log', 'yscale':'log',
-            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
-        }
-        # self.set_plot_dics.append(corr_dic_rho_dens_unb_bern)
-
-        corr_dic_ang_mom_flux_theta = { # relies on the "get_res_corr(self, it, v_n): " method of data object
-            'name': 'corr', 'position': (1, 3), 'title': 'time [ms]', 'cbar':  None, #'right .05 .0',
-            'it': it, 'v_n_x': 'theta', 'v_n_y': 'ang_mom_flux', 'v_n': 'mass',
-            'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'vmin': 1e-7, 'vmax': None,
-            'xscale':'line', 'yscale':'log',
-            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
-        }
-        # self.set_plot_dics.append(corr_dic_ang_mom_flux_theta)
-
-        corr_dic_ang_mom_flux_dens_unb_bern = { # relies on the "get_res_corr(self, it, v_n): " method of data object
-            'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar': 'right .03 .0',
-            'it': it, 'v_n_x': 'dens_unb_bern', 'v_n_y': 'ang_mom_flux', 'v_n': 'mass',
-            'xmin': 1e-11, 'xmax': 1e-7, 'ymin': 1e-11, 'ymax': 1e-7, 'vmin': 1e-7, 'vmax': None,
-            'xscale':'log', 'yscale':'log',
-            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
-        }
-        # self.set_plot_dics.append(corr_dic_ang_mom_flux_dens_unb_bern)
-
-        corr_dic_inv_ang_mom_flux_dens_unb_bern = { # relies on the "get_res_corr(self, it, v_n): " method of data object
-            'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar': 'right .03 .0',
-            'it': it, 'v_n_x': 'dens_unb_bern', 'v_n_y': 'inv_ang_mom_flux', 'v_n': 'mass',
-            'xmin': 1e-11, 'xmax': 1e-7, 'ymin': 1e-11, 'ymax': 1e-7, 'vmin': 1e-7, 'vmax': None,
-            'xscale':'log', 'yscale':'log',
-            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
-        }
-        self.set_plot_dics.append(corr_dic_inv_ang_mom_flux_dens_unb_bern)
-
-        corr_dic_rho_ang_mom_flux = { # relies on the "get_res_corr(self, it, v_n): " method of data object
-            'name': 'corr', 'position': (1, 2), 'title': 'time [ms]', 'cbar':  'right .05 .0',
-            'it': it, 'v_n_x': 'rho', 'v_n_y': 'ang_mom_flux', 'v_n': 'mass',
-            'xmin': None, 'xmax': None, 'ymin': None, 'ymax': 1e-3, 'vmin': 1e-7, 'vmax': None,
-            'xscale':'log', 'yscale':'log',
-            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
-        }
-        # self.set_plot_dics.append(corr_dic_rho_ang_mom_flux)
-
-        corr_dic_rho_theta = { # relies on the "get_res_corr(self, it, v_n): " method of data object
-            'name': 'corr', 'position': (1, 2), 'title': 'time [ms]', 'cbar':None, #   'right .05 .0',
-            'it': it, 'v_n_x': 'theta', 'v_n_y': 'rho', 'v_n': 'mass',
-            'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'vmin': 1e-7, 'vmax': None,
-            'xscale': 'line', 'yscale': 'log',
-            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
-        }
-        # self.set_plot_dics.append(corr_dic_rho_theta)
-
-        corr_dic_rho_r = { # relies on the "get_res_corr(self, it, v_n): " method of data object
-            'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar': None,#  'right .05 .0',
-            'it': it, 'v_n_x': 'r', 'v_n_y': 'rho', 'v_n': 'mass',
-            'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'vmin': 1e-7, 'vmax': None,
-            'xscale': 'line', 'yscale': 'log',
-            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
-        }
-        # self.set_plot_dics.append(corr_dic_rho_r)
-
-        corr_dic_rho_Ye = { # relies on the "get_res_corr(self, it, v_n): " method of data object
-            'name': 'corr', 'position': (1, 2), 'title': 'time [ms]', 'cbar': 'right .05 .0',
-            'it': it, 'v_n_x': 'rho', 'v_n_y': 'Ye', 'v_n': 'mass',
-            'xmin': None, 'xmax': None, 'ymin': 0., 'ymax': 0.4, 'vmin': 1e-8, 'vmax': None,
-            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
-        }
-        # self.set_plot_dics.append(corr_dic_rho_Ye)
-
-    def set_ncols_nrows(self):
-
-        tmp_rows = []
-        tmp_cols = []
-
-        for dic in self.set_plot_dics:
-            tmp_cols.append(dic['position'][1])
-            tmp_rows.append(dic['position'][0])
-
-        max_row = max(tmp_rows)
-        max_col = max(tmp_cols)
-
-        for row in range(1, max_row):
-            if not row in tmp_rows:
-                raise NameError("Please set vertical plot position in a subsequent order: 1,2,3... not 1,3...")
-
-        for col in range(1, max_col):
-            if not col in tmp_cols:
-                raise NameError("Please set horizontal plot position in a subsequent order: 1,2,3... not 1,3...")
-
-        print("Set {} rows {} columns (total {}) of plots".format(max_row, max_col, len(self.set_plot_dics)))
-
-        return max_row, max_col
-
-    def set_plot_dics_matrix(self):
-
-        plot_dic_matrix = [[0
-                             for x in range(self.n_rows)]
-                             for y in range(self.n_cols)]
-
-        # get a matrix of dictionaries describing plots (for ease of representation)
-        for dic in self.set_plot_dics:
-            col, row = int(dic['position'][1]-1), int(dic['position'][0]-1) # -1 as position starts with 1
-            # print(col, row)
-            for n_row in range(self.n_rows):
-                for n_col in range(self.n_cols):
-                    if int(col) == int(n_col) and int(row) == int(n_row):
-                        plot_dic_matrix[n_col][n_row] = dic
-                        # print('adding {} {}'.format(col, row))
-
-            if isinstance(plot_dic_matrix[col][row], int):
-                raise ValueError("Dictionary to found for n_row {} n_col {} in "
-                                 "creating matrix of dictionaries".format(col, row))
-
-        return plot_dic_matrix
-
-    def set_plot_matrix(self):
-
-        fig = plt.figure(figsize=self.gen_set['figsize'])  # (<->; v)
-
-
-        if self.gen_set['type'] == 'cartesian':
-            # initializing the matrix with dummy axis objects
-            sbplot_matrix = [[fig.add_subplot(self.n_rows, self.n_cols, 1)
-                                  for x in range(self.n_rows)]
-                                  for y in range(self.n_cols)]
-
-            i = 1
-            for n_row in range(self.n_rows):
-                for n_col in range(self.n_cols):
-
-                    if n_col == 0 and n_row == 0:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i)
-                    elif n_col == 0 and n_row > 0:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
-                                                                      )#sharex=self.sbplot_matrix[n_col][0])
-                    elif n_col > 0 and n_row == 0:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
-                                                                      )#sharey=self.sbplot_matrix[0][n_row])
-                    else:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
-                                                                      #sharex=self.sbplot_matrix[n_col][0],
-                                                                      )#sharey=self.sbplot_matrix[0][n_row])
-
-                        # sbplot_matrix[n_col][n_row].axes.get_yaxis().set_visible(False)
-                    # sbplot_matrix[n_col][n_row] = fig.add_subplot(n_rows, n_cols, i)
-                    i += 1
-
-        elif self.gen_set['type'] == 'polar':
-            # initializing the matrix with dummy axis objects
-            sbplot_matrix = [[fig.add_subplot(self.n_rows, self.n_cols, 1, projection='polar')
-                                  for x in range(self.n_rows)]
-                                  for y in range(self.n_cols)]
-
-            i = 1
-            for n_row in range(self.n_rows):
-                for n_col in range(self.n_cols):
-
-                    if n_col == 0 and n_row == 0:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
-                    elif n_col == 0 and n_row > 0:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
-                                                                      # sharex=self.sbplot_matrix[n_col][0])
-                    elif n_col > 0 and n_row == 0:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
-                                                                      # sharey=self.sbplot_matrix[0][n_row])
-                    else:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
-                                                                      # sharex=self.sbplot_matrix[n_col][0],
-                                                                      # sharey=self.sbplot_matrix[0][n_row])
-
-                        # sbplot_matrix[n_col][n_row].axes.get_yaxis().set_visible(False)
-                    # sbplot_matrix[n_col][n_row] = fig.add_subplot(n_rows, n_cols, i)
-                    i += 1
-        else:
-            raise NameError("type of the plot is not recognized. Use 'polar' or 'cartesian' ")
-
-        return fig, sbplot_matrix
-
-    def plot_one_task(self, ax, dic):
-
-        if dic["name"] == "corr":
-            im = self.plot_correlation(ax, dic)
-        else:
-            raise NameError("name:{} is not recognized"
-                            .format(dic["name"]))
-        # self.time
-        return im
-
-    def set_plot_title(self, ax, plot_dic):
-        if plot_dic["title"] != '' and plot_dic["title"] != None:
-
-            if plot_dic["title"] == 'it':
-                title = plot_dic["it"]
-            elif plot_dic["title"] == 'time [s]' or \
-                plot_dic["title"] == 'time':
-                title = "%.3f" % self.get_time(plot_dic["it"]) + " [s]"
-            elif plot_dic["title"] == 'time [ms]':
-                title = "%.1f" % (self.get_time(plot_dic["it"]) * 1000) + " [ms]"
-            else:
-                title = plot_dic["title"]
-            ax.title.set_text(r'{}'.format(title))
-
-    def plot_images(self):
-
-        # initializing the matrix of images for colorbars (if needed)
-        image_matrix = [[0
-                        for x in range(self.n_rows)]
-                        for y in range(self.n_cols)]
-
-        for n_row in range(self.n_rows):
-            for n_col in range(self.n_cols):
-                print("Plotting n_row:{} n_col:{}".format(n_row, n_col))
-                ax = self.sbplot_matrix[n_col][n_row]
-                dic = self.plot_dic_matrix[n_col][n_row]
-                if isinstance(dic, int):
-                    Printcolor.yellow("Dictionary for row:{} col:{} not set".format(n_row, n_col))
-                    self.fig.delaxes(ax) # delets the axis for empty plot
-                else:
-                    dic = dict(dic)
-                    im = self.plot_one_task(ax, dic)
-                    self.set_plot_title(ax, dic)
-                    image_matrix[n_col][n_row] = im
-
-        return image_matrix
-
-    def plot_one_cbar(self, im, dic, n_row, n_col):
-
-        if dic["cbar"] != None and dic["cbar"] != '':
-
-            location = dic["cbar"].split(' ')[0]
-            shift_h = float(dic["cbar"].split(' ')[1])
-            shift_w = float(dic["cbar"].split(' ')[2])
-            cbar_width = 0.02
-
-
-            if location == 'right':
-                ax_to_use = self.sbplot_matrix[-1][n_row]
-                pos1 = ax_to_use.get_position()
-                pos2 = [pos1.x0 + pos1.width + shift_h,
-                        pos1.y0,
-                        cbar_width,
-                        pos1.height]
-            elif location == 'left':
-                ax_to_use = self.sbplot_matrix[-1][n_row]
-                pos1 = ax_to_use.get_position()
-                pos2 = [pos1.x0 - pos1.width - shift_h,
-                        pos1.y0,
-                        cbar_width,
-                        pos1.height]
-            elif location == 'bottom':
-                ax_to_use = self.sbplot_matrix[n_col][-1]
-                pos1 = ax_to_use.get_position()
-                pos2 = [pos1.x0,
-                        pos1.y0 - pos1.height + shift_w,
-                        cbar_width,
-                        pos1.height]
-            else:
-                raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
-                                .format(location))
-
-            cax1 = self.fig.add_axes(pos2)
-            if location == 'right':
-                cbar = plt.colorbar(im, cax=cax1, extend='both')#, format='%.1e')
-            elif location == 'left':
-                cbar = plt.colorbar(im, cax=cax1, extend='both')#, format='%.1e')
-                cax1.yaxis.set_ticks_position('left')
-                cax1.yaxis.set_label_position('left')
-            else:
-                raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
-                                .format(location))
-            cbar.ax.set_title(r"{}".format(str(dic["v_n"]).replace('_', '\_')))
-
-    def plot_colobars(self):
-
-        for n_row in range(self.n_rows):
-            for n_col in range(self.n_cols):
-                print("Colobar for n_row:{} n_col:{}".format(n_row, n_col))
-                # ax  = self.sbplot_matrix[n_col][n_row]
-                dic = self.plot_dic_matrix[n_col][n_row]
-                im  = self.image_matrix[n_col][n_row]
-                if isinstance(dic, int):
-                    Printcolor.yellow("Dictionary for row:{} col:{} not set".format(n_row, n_col))
-                else:
-                    self.plot_one_cbar(im, dic, n_row, n_col)
-
-    def save_plot(self):
-
-        plt.subplots_adjust(hspace=self.gen_set["subplots_adjust_h"])
-        plt.subplots_adjust(wspace=self.gen_set["subplots_adjust_w"])
-        # plt.tight_layout()
-        plt.savefig('{}{}'.format(self.gen_set["figdir"], self.gen_set["figname"]),
-                    bbox_inches='tight', dpi=128)
-        plt.close()
-
-    def main(self):
-
-        # initializing the n_cols, n_rows
-        self.n_rows, self.n_cols = self.set_ncols_nrows()
-        # initializing the matrix of dictionaries of the
-        self.plot_dic_matrix = self.set_plot_dics_matrix()
-        # initializing the axis matrix (for all subplots) and image matrix fo colorbars
-        self.fig, self.sbplot_matrix = self.set_plot_matrix()
-        # plotting
-        self.image_matrix = self.plot_images()
-        # adding colobars
-        self.plot_colobars()
-
-
-        # saving the result
-        self.save_plot()
-
-""" --- --- LOADING & PLOTTING R-phi Phi-Z --- ---"""
 
 class LOAD_INT_DATA:
 
@@ -1746,40 +1398,30 @@ class LOAD_INT_DATA:
 
         self.sim = sim
 
-        # getting list of iterations ( for storage capacity reasons)
-        iterations = []
-        fname = '*.h5'
-        root = Paths.gw170817 + sim + '/profiles/3d/'
-        files = locate(fname, root=root, followlinks=False)
-        if len(files) == 0:
-            raise NameError("No iterations found in the root:{}".format(root))
-        if os.path.isfile(root+"ittime.txt"):
-            list_iterations, self.times = np.loadtxt(root+"ittime.txt", usecols=(0, 1), unpack=True)
-            self.list_iterations = list(list_iterations)
-        else:
-            for file_ in files:
-                iterations.append(int(str(file_.split('/')[-1]).split('.h5')[0]))
-            self.times = interpoate_time_form_it(iterations, Paths.gw170817+sim+'/')
-            self.list_iterations = iterations
-        if len(self.list_iterations) == 0:
-            raise IOError("No iterations found")
+        self.list_iterations = list(get_list_iterationsfrom_res_3d(sim))
+        self.times = interpoate_time_form_it(self.list_iterations, Paths.gw170817 + sim + '/')
 
+        # GRID
         self.grid_type = "cyl"
         self.list_grid_v_ns = ["x_cyl", "y_cyl", "z_cyl",
                           "r_cyl", "phi_cyl",
                           "dr_cyl", "dphi_cyl", "dz_cyl"]
 
-        self.grid_data_matrix = [[np.zeros(0,)
+        # for overriding the search for a grid.h5 in every iteration folder
+        self.flag_force_unique_grid = False
+        self.it_for_unique_grid = get_it_from_itdir(find_itdir_with_grid(sim, "cyl_grid.h5"))
+
+        self.grid_data_matrix = [[np.zeros(0)
                                  for x in range(len(self.list_grid_v_ns))]
                                  for y in range(len(self.list_iterations))]
 
 
         self.list_of_v_ns = ["ang_mom", "ang_mom_flux", "density", "dens_unb_geo",
-                             "dens_unb_bern","rho", "temp", "Ye"]
+                             "dens_unb_bern","rho", "temp", "Ye", "lapse", "vr"]
 
-        self.data_matrix = [[np.zeros(0,)
+        self.data_int_matrix = [[np.zeros(0)
                                  for x in range(len(self.list_of_v_ns))]
-                                 for y in range(len(self.list_iterations))]
+                                for y in range(len(self.list_iterations))]
 
     def check_grid_v_n(self, v_n):
         if not v_n in self.list_grid_v_ns:
@@ -1793,8 +1435,10 @@ class LOAD_INT_DATA:
 
     def check_it(self, it):
         if not it in self.list_iterations:
-            raise NameError("it:{} not in the list of iterations\n{}"
-                            .format(it, self.list_iterations))
+            raise NameError("it:{} not in the list of iterations \n{}"
+                            .format(it,
+                                    # self.list_iterations[find_nearest_index(np.array(self.list_iterations), it)],
+                                    self.list_iterations))
 
     def i_data_v_n(self, v_n):
         self.check_data_v_n(v_n)
@@ -1813,7 +1457,7 @@ class LOAD_INT_DATA:
         path = Paths.ppr_sims + self.sim + "/res_3d/" + str(int(it)) + '/'
         fname = path + self.grid_type + '_grid.h5'
         grid_file = h5py.File(fname, "r")
-
+        # print(grid_file)
         for v_n in self.list_grid_v_ns:
             if v_n not in grid_file:
                 raise NameError("Loaded grid file {} does not have v_n:{} Expected only:\n{}"
@@ -1840,18 +1484,28 @@ class LOAD_INT_DATA:
 
         data = np.array(data_file[v_n], dtype=np.float)
 
-        self.data_matrix[self.i_it(it)][self.i_data_v_n(v_n)] = data
+        # print("loaded data ")
+        # print(data)
+
+        self.data_int_matrix[self.i_it(it)][self.i_data_v_n(v_n)] = data
 
     def is_grid_loaded(self, it):
 
-        if len(self.grid_data_matrix[self.i_it(it)][self.i_grid_v_n(self.list_grid_v_ns[0])]) == 0:
+        # if true it will only checks one it (and one grid) regardless of what it is called
+        if self.flag_force_unique_grid and self.it_for_unique_grid != None:
+            it = self.it_for_unique_grid
+
+        grid_arr = self.grid_data_matrix[self.i_it(it)][self.i_grid_v_n(self.list_grid_v_ns[0])]
+        # print(grid_arr);
+        # exit(1)
+        if len(grid_arr) == 0:
             self.load_grid(it)
 
     def is_data_loaded(self, it, v_n):
-
-        if len(self.data_matrix[self.i_it(it)][self.i_data_v_n(v_n)]) == 0:
+        data = self.data_int_matrix[self.i_it(it)][self.i_data_v_n(v_n)]
+        # print(data); exit(1)
+        if len(data) == 0:
             self.load_data(it, v_n)
-
 
     def get_grid_data(self, it, v_n):
         self.check_it(it)
@@ -1859,15 +1513,1034 @@ class LOAD_INT_DATA:
 
         self.is_grid_loaded(it)
 
-        return self.grid_data_matrix[self.i_it(it)][self.i_grid_v_n(v_n)]
+        if self.flag_force_unique_grid and self.it_for_unique_grid != None:
+            return self.grid_data_matrix[self.i_it(self.it_for_unique_grid)][self.i_grid_v_n(v_n)]
+        else:
+            return self.grid_data_matrix[self.i_it(it)][self.i_grid_v_n(v_n)]
 
-    def get_data(self, it, v_n):
+    def get_int_data(self, it, v_n):
         self.check_it(it)
         self.check_data_v_n(v_n)
 
         self.is_data_loaded(it, v_n)
 
-        return self.data_matrix[self.i_it(it)][self.i_data_v_n(v_n)]
+        return np.array(self.data_int_matrix[self.i_it(it)][self.i_data_v_n(v_n)])
+
+    def get_time(self, it):
+        self.check_it(it)
+        return self.times[self.list_iterations.index(it)]
+
+class ADD_METHODS_FOR_INT_DATA(LOAD_INT_DATA):
+
+    def __init__(self, sim):
+
+        LOAD_INT_DATA.__init__(self, sim)
+
+    def ingeg_over_z(self, it, z3d_arr):
+        dz = self.get_grid_data(it, "dz_cyl")
+        return 2 * np.sum(z3d_arr * dz, axis=(2))
+
+    def fill_pho0_and_phi2pi(self, phi1d_arr, z2d_arr):
+        # adding phi = 360 point *copy of phi = 358(
+        phi1d_arr = np.append(phi1d_arr, 2 * np.pi)
+        z2d_arr = np.vstack((z2d_arr.T, z2d_arr[:, -1])).T
+        # adding phi == 0 point (copy of phi=1)
+        phi1d_arr = np.insert(phi1d_arr, 0, 0)
+        z2d_arr = np.vstack((z2d_arr[:, 0], z2d_arr.T)).T
+        return phi1d_arr, z2d_arr
+
+
+    def get_modified_2d_data(self, it, v_n_x, v_n_y, v_n_z, mod):
+
+        x_arr = self.get_grid_data(it, v_n_y)
+        y_arr = self.get_grid_data(it, v_n_x)
+        z_arr = self.get_int_data(it, v_n_z)
+
+
+
+
+
+        if mod == 'xy slice':
+            return np.array(x_arr[:, 0, 0]), np.array(y_arr[0, :, 0]), np.array(z_arr[:, :, 0]),
+
+        elif mod == 'integ_over_z':
+            return  np.array(x_arr[:, 0, 0]),np.array(y_arr[0, :, 0]), self.ingeg_over_z(it, z_arr)
+
+        elif mod == 'integ_over_z fill_phi':
+            y_arr, z_arr = self.fill_pho0_and_phi2pi(np.array(y_arr[0, :, 0]),
+                                                     self.ingeg_over_z(it, z_arr))
+            print(x_arr[:, 0, 0].shape, y_arr.shape, z_arr.shape)
+            return np.array(x_arr[:, 0, 0]), y_arr, z_arr
+
+        elif mod == 'integ_over_z fill_phi *r':
+            r2d_arr = np.array(x_arr[:, :, 0])
+            phi_arr = np.array(y_arr[0, :, 0])
+            z2d_arr = self.ingeg_over_z(it, z_arr)
+
+            rz2d = r2d_arr * z2d_arr
+            phi_arr, rz2d = self.fill_pho0_and_phi2pi(phi_arr, rz2d)
+
+            return np.array(x_arr[:, 0, 0]), phi_arr, rz2d
+
+        elif mod == 'integ_over_z fill_phi *r log':
+
+            r2d_arr = np.array(x_arr[:, :, 0])
+            phi_arr = np.array(y_arr[0, :, 0])
+            z2d_arr = self.ingeg_over_z(it, z_arr)
+
+            rz2d = r2d_arr * z2d_arr
+            phi_arr, rz2d = self.fill_pho0_and_phi2pi(phi_arr, rz2d)
+
+            return np.array(x_arr[:, 0, 0]), phi_arr, np.log10(rz2d)
+
+        elif mod == 'integ_over_z fill_phi -ave(r)':
+
+            r2d_arr = np.array(x_arr[:, :, 0])
+            phi_arr = np.array(y_arr[0, :, 0])
+            z2d_arr = self.ingeg_over_z(it, z_arr)
+
+            for i in range(len(x_arr[:, 0, 0])):
+                z2d_arr[i, :] = z2d_arr[i, :] - (np.sum(z2d_arr[i, :]) / len(z2d_arr[i, :]))
+
+            phi_arr, rz2d = self.fill_pho0_and_phi2pi(phi_arr, z2d_arr)
+
+            return np.array(x_arr[:, 0, 0]), phi_arr, rz2d
+
+        else:
+            raise NameError("Unknown 'mod' parameter:{} ".format(mod))
+
+class COMPUTE_STORE_DESITYMODES(LOAD_INT_DATA):
+
+    def __init__(self, sim):
+
+        LOAD_INT_DATA.__init__(self, sim)
+
+        self.gen_set = {
+            'v_n': 'density',
+            'v_n_r': 'r_cyl',
+            'v_n_dr': 'dr_cyl',
+            'v_n_phi': 'phi_cyl',
+            'v_n_dphi': 'dphi_cyl',
+            'v_n_dz': 'dz_cyl',
+            'iterations': 'all',
+            'do_norm':True,
+            'm_to_norm': 0,
+            'outfname': 'density_modes_int_lapse15.h5',
+            'outdir': Paths.ppr_sims + sim + '/res_3d/',
+            'lapse_mask': 0.15
+        }
+
+        self.list_modes = [0, 1, 2, 3, 4, 5, 6]
+        self.list_dm_v_ns = ["int_phi", "int_phi_r"]
+        self.data_dm_matrix = [[[np.zeros(0,)
+                              for k in range(len(self.list_dm_v_ns))]
+                             for z in range(len(self.list_modes))]
+                            for k in range(len(self.list_iterations))]
+
+
+    def check_dm_v_n(self, v_n):
+        if v_n not in self.list_dm_v_ns:
+            raise NameError("v_n: {} not in the list of Density Modes v_ns\n{}"
+                            .format(v_n, self.list_dm_v_ns))
+
+    def check_mode(self, mode):
+        if not int(mode) in self.list_modes:
+            raise NameError("mode:{} not in the list of modes\n{}"
+                            .format(mode, self.list_modes))
+
+    def i_mode(self, mode):
+        self.check_mode(mode)
+        return int(self.list_modes.index(mode))
+
+    def i_dm_v_n(self, v_n):
+        self.check_dm_v_n(v_n)
+        return int(self.list_dm_v_ns.index(v_n))
+
+    def compute_density_mode(self, it, mode):
+
+        # getting grid
+        r_cyl = self.get_grid_data(it, self.gen_set["v_n_r"])
+        dr_cyl = self.get_grid_data(it, self.gen_set["v_n_dr"])
+        phi_cyl = self.get_grid_data(it, self.gen_set["v_n_phi"])
+        dphi_cyl = self.get_grid_data(it, self.gen_set["v_n_dphi"])
+        dz_cyl = self.get_grid_data(it, self.gen_set["v_n_dz"])
+
+        # getting data
+        density = self.get_int_data(it, self.gen_set["v_n"])
+
+        if self.gen_set["lapse_mask"] != None:
+            lapse =  self.get_int_data(it, "lapse")
+            density[lapse < float(self.gen_set["lapse_mask"])] = 0
+
+        # print(density.shape, phi_cyl.shape, r_cyl.shape, dr_cyl.shape)
+        # print(dr_cyl[:, :, 0])
+
+        m_int_phi, m_int_phi_r = \
+            PHYSICS.get_dens_decomp_3d(density, r_cyl, phi_cyl, dphi_cyl, dr_cyl, dz_cyl, m=mode)
+
+        if self.gen_set["do_norm"]:
+            # print("norming")
+            m_int_phi_norm, m_int_phi_r_norm = \
+                PHYSICS.get_dens_decomp_3d(density, r_cyl, phi_cyl, dphi_cyl, dr_cyl, dz_cyl, m=int(self.gen_set["m_to_norm"]))
+            m_int_phi /= m_int_phi_norm
+            m_int_phi_r /= m_int_phi_r_norm
+
+
+
+        self.data_dm_matrix[self.i_it(it)][self.i_mode(mode)][self.i_dm_v_n("int_phi")] = \
+            m_int_phi
+        self.data_dm_matrix[self.i_it(it)][self.i_mode(mode)][self.i_dm_v_n("int_phi_r")] = \
+            np.array([m_int_phi_r])
+
+    def is_computed(self, it, mode, v_n):
+
+        if len(self.data_dm_matrix[self.i_it(it)][self.i_mode(mode)][self.i_dm_v_n(v_n)]) == 0:
+            self.compute_density_mode(it, mode)
+
+    def get_density_mode(self, it, mode, v_n):
+        self.check_it(it)
+        self.check_mode(mode)
+        self.check_dm_v_n(v_n)
+        self.is_computed(it, mode, v_n)
+        return self.data_dm_matrix[self.i_it(it)][self.i_mode(mode)][self.i_dm_v_n(v_n)]
+
+class LOAD_DENSITY_MODES:
+
+    def __init__(self, sim):
+
+        self.sim = sim
+
+        self.gen_set = {
+            'maximum_modes': 50,
+            'fname' :  Paths.ppr_sims + sim + '/res_3d/' + "density_modes.h5",
+            'int_phi': 'int_phi',
+            'int_phi_r': 'int_phi_r',
+            'r_cyl': 'r_cyl',
+            'times': 'times',
+            'iterations':'iterations'
+        }
+
+
+
+        self.n_of_modes_max = 50
+        self.list_data_v_ns = ["int_phi", "int_phi_r"]
+        self.list_grid_v_ns = ["r_cyl", "times", "iterations"]
+
+        self.data_dm_matrix = [[np.zeros(0,)
+                              for k in range(len(self.list_data_v_ns))]
+                              for z in range(self.n_of_modes_max)]
+
+        self.grid_matrix = [np.zeros(0,)
+                              for k in range(len(self.list_grid_v_ns))]
+
+        self.list_modes = []
+
+    def check_data_v_n(self, v_n):
+        if not v_n in self.list_data_v_ns:
+            raise NameError("v_n: {} not in data list:\n{}"
+                            .format(v_n, self.list_data_v_ns))
+
+    def check_grid_v_n(self, v_n):
+        if not v_n in self.list_grid_v_ns:
+            raise NameError("v_n: {} not in grid list:\n{}"
+                            .format(v_n,  self.list_grid_v_ns))
+
+    def i_v_n(self, v_n):
+        if v_n in self.list_data_v_ns:
+            return int(self.list_data_v_ns.index(v_n))
+        else:
+            return int(self.list_grid_v_ns.index(v_n))
+
+    def check_mode(self, mode):
+        if len(self.list_modes) == 0:
+            raise ValueError("list of modes was not loaded before data extraction")
+        if not mode in self.list_modes:
+            raise ValueError("mode: {} available modes: {}"
+                             .format(mode, self.list_modes))
+
+    def i_mode(self, mode):
+        if len(self.list_modes) == 0:
+            raise ValueError("list of modes was not loaded before data extraction")
+        return int(self.list_modes.index(mode))
+
+    def load_density_modes(self):
+
+        dfile = h5py.File(self.gen_set['fname'], "r")
+
+        for v_n in dfile:
+            # extracting data for all modes
+            if str(v_n).__contains__("m="):
+                mode = int(v_n.split("m=")[-1])
+                self.list_modes.append(mode)
+                group = dfile[v_n]
+                for v_n_ in group:
+                    if str(v_n_) in self.list_data_v_ns:
+                        self.data_dm_matrix[self.i_mode(mode)][self.i_v_n(v_n_)] = np.array(group[v_n_])
+                    else:
+                        raise NameError("{} group has a v_n: {} that is not in the data list:\n{}"
+                                        .format(v_n, v_n_, self.list_data_v_ns))
+                if len(self.list_modes) > self.n_of_modes_max - 1:
+                    raise ValueError("too many modes (>{})".format(self.n_of_modes_max))
+
+            # extracting grid data, for overall
+            else:
+                if v_n in self.list_grid_v_ns:
+                    self.grid_matrix[self.i_v_n(v_n)] = np.array(dfile[v_n])
+                else:
+                    NameError("dfile v_n: {} not in list of grid v_ns\n{}"
+                                    .format(v_n, self.list_grid_v_ns))
+
+        print("  modes: {}".format(self.list_modes))
+
+    def is_loaded(self, mode, v_n):
+
+        if len(self.list_modes) == 0:
+            self.load_density_modes()
+        elif len(self.data_dm_matrix[self.i_mode(mode)][self.i_v_n(v_n)]) == 0:
+            self.load_density_modes()
+
+    def get_grid(self, v_n):
+
+        if len(self.list_modes) == 0:
+            self.load_density_modes()
+        self.check_grid_v_n(v_n)
+        self.is_loaded(self.list_modes[0], self.list_grid_v_ns[0])
+
+        return self.grid_matrix[self.i_v_n(v_n)]
+
+    def get_data(self, mode, v_n):
+
+        self.check_data_v_n(v_n)
+        if len(self.list_modes) == 0:
+            self.load_density_modes()
+
+        self.is_loaded(mode, v_n)
+
+        return self.data_dm_matrix[self.i_mode(mode)][self.i_v_n(v_n)]
+
+
+
+
+""" --- --- PLOTTING RESILTS --- --- """
+
+
+class PLOT_TASK:
+
+    def __init__(self, o_data_class, plot_type):
+        self.data = o_data_class
+        self.plot_type = plot_type
+        pass
+
+    def plot_x_y_z2d_colormesh(self, ax, dic):
+
+        if dic['name'] == "corr":
+
+            table = self.data.get_res_corr(dic["it"], dic["v_n_x"], dic["v_n_y"])
+            table = np.array(table)
+            x_arr = table[0, 1:]  # * 6.176269145886162e+17
+            y_arr = table[1:, 0]
+            z_arr = table[1:, 1:]
+
+            z_arr = z_arr / np.sum(z_arr)
+
+            im = self.plot_colormesh(ax, dic, x_arr, y_arr, z_arr)
+
+        elif dic['name'] == 'int':
+
+            y_arr = self.data.get_grid_data(dic["it"], dic["v_n_x"]) # phi
+            x_arr = self.data.get_grid_data(dic["it"], dic["v_n_y"]) # r
+            z_arr = self.data.get_int_data(dic["it"], dic["v_n"])
+
+            x_arr = np.array(x_arr[:, 0, 0])
+            y_arr = np.array(y_arr[0, :, 0]) # phi
+            z_arr = np.array(z_arr[:, :, 0]) # take a slice
+
+            # print(x_arr.shape, y_arr.shape, z_arr.shape)
+            # print(y_arr)
+
+            im = self.plot_colormesh(ax, dic, y_arr, x_arr, z_arr) # phi, r, data
+
+        else:
+            raise NameError("plot type dic[name] is not recognised (given: {})".format(dic["name"]))
+
+        return im
+
+    def plot_colormesh(self, ax, dic, x_arr, y_arr, z_arr):
+
+
+        # special treatment
+        if dic["v_n_x"] == "theta": x_arr = 90 - (180 * x_arr / np.pi)
+        if dic["v_n_y"] == "theta": y_arr = 90 - (180 * y_arr / np.pi)
+
+        if dic["v_n_x"] == "phi": x_arr = 180 + (180 * x_arr / np.pi)
+        if dic["v_n_y"] == "phi": y_arr = 180 + (180 * y_arr / np.pi)
+
+        if dic["v_n_x"] == "rho": x_arr *= 6.176269145886162e+17
+        if dic["v_n_y"] == "rho": y_arr *= 6.176269145886162e+17
+
+        # z_arr = 2 * np.maximum(z_arr, 1e-12)  # WHAT'S THAT?
+
+        # limits
+        if self.plot_type == "cartesian":
+            if dic["xmin"] != None and dic["xmax"] != None:
+                ax.set_xlim(dic["xmin"], dic["xmax"])
+            if dic["ymin"] != None and dic["ymax"] != None:
+                ax.set_ylim(dic["ymin"], dic["ymax"])
+            if dic["xscale"] == 'log':
+                ax.set_xscale("log")
+            if dic["yscale"] == 'log':
+                ax.set_yscale("log")
+            ax.set_ylabel(dic["v_n_y"].replace('_', '\_'))
+        elif self.plot_type == "polar":
+            if dic["phimin"] != None and dic["phimax"] != None:
+                ax.set_philim(dic["phimin"], dic["phimax"])
+            if dic["rmin"] != None and dic["rmax"] != None:
+                ax.set_rlim(dic["rmin"], dic["rmax"])
+
+        else:
+            raise NameError("Unknown type of the plot: {}".format(self.plot_type))
+
+        if dic["vmin"] == None: dic["vmin"] = z_arr.min()
+        if dic["vmax"] == None: dic["vmax"] = z_arr.max()
+
+        if dic["norm"] == "norm" or dic["norm"] == "line" or dic["norm"] == None:
+            norm = Normalize(vmin=dic["vmin"], vmax=dic["vmax"])
+        elif dic["norm"] == "log":
+            norm = LogNorm(vmin=dic["vmin"], vmax=dic["vmax"])
+        else:
+            raise NameError("unrecognized norm: {} in task {}"
+                            .format(dic["norm"], dic["v_n"]))
+
+        ax.set_xlabel(dic["v_n_x"].replace('_', '\_'))
+
+
+
+        im = ax.pcolormesh(x_arr, y_arr, z_arr, norm=norm, cmap=dic["cmap"])#, vmin=dic["vmin"], vmax=dic["vmax"])
+        im.set_rasterized(True)
+
+        return im
+
+    def plot_countours(self, ax, dic):
+
+        y_arr = self.data.get_grid_data(dic["it"], dic["v_n_x"])  # phi
+        x_arr = self.data.get_grid_data(dic["it"], dic["v_n_y"])  # r
+        z_arr = self.data.get_int_data(dic["it"], dic["v_n"])
+
+        x_arr = np.array(x_arr[:, 0, 0])
+        y_arr = np.array(y_arr[0, :, 0])  # phi
+        z_arr = np.array(z_arr[:, :, 0])  # take a slice
+
+        ax.contour(y_arr, x_arr, z_arr, dic["levels"], colors=dic["colors"])
+
+        if dic["rmin"] != None and dic["rmax"] != None:
+            ax.set_rlim(dic["rmin"], dic["rmax"])
+
+    def plot_density_mode(self, ax, dic):
+
+        dfile = dic["dfile"]
+        it = dic["it"]
+        p_int_phi = dic["plot_int_phi"]
+        p_int_phi_r = dic["plot_int_phi_r"]
+        mode = dic["mode"]
+        r_max = dic["rmax"]
+
+        # dfile = h5py.File(Paths.ppr_sims + sim + '/res_3d/' + load_file, "r")
+        group = dfile["m=%d" % mode]
+        times = np.array(dfile["times"])
+        iterations = np.array(dfile["iterations"])
+        r_cyl = np.array(dfile["r_cyl"])
+
+        int_phi2d = np.array(group["int_phi"])
+        int_phi_r1d = np.array(group["int_phi_r"])
+
+        if not it in iterations:
+            raise ValueError("it: {} not found in the iteration list fron density_modes.h5 file \n {}"
+                             .format(it, iterations))
+
+        print(int_phi2d.shape)
+
+        int_phi_r1d_for_it = int_phi_r1d[iterations == it]
+        int_phi2d_for_it = int_phi2d[int(np.where(iterations == it)[0]), :]
+
+        if len(int_phi2d_for_it) != len(r_cyl):
+            raise ValueError("Error len(int_phi2d_for_it) {} != {} len(r_cyl)".format(
+                             len(int_phi2d_for_it), len(r_cyl)))
+
+        if p_int_phi_r:
+            # for one 'r'
+            phi = np.zeros(r_cyl.shape)
+            # print(np.angle(int_phi_r1d_for_it))
+            phi.fill(float(np.angle(int_phi_r1d_for_it)))
+            ax.plot(phi[r_cyl < r_max], r_cyl[r_cyl < r_max], '-', color='black')  # plot integrated
+
+        if p_int_phi:
+            # for every 'r'
+            ax.plot(np.angle(int_phi2d_for_it)[r_cyl < r_max], r_cyl[r_cyl < r_max], '-.', color='black')
+
+
+    def plot_summed_correlation_with_time(self):
+        """
+            this is temporatry function meade to show the summed histograms in ang_mom_flux_dens_unb_bern
+            space
+
+        :return:
+        """
+        times = []
+        total_masses = []
+        for it in self.data.list_iterations:
+
+            table = self.data.get_res_corr(int(it), "ang_mom_flux", "dens_unb_bern")
+            time_ = self.data.get_time(int(it))
+
+            table = np.array(table)
+            # table[0, 1:] = table[0, 1:] * 6.176269145886162e+17
+
+            x_arr = table[0,1 :] #* 6.176269145886162e+17
+            y_arr = table[1:, 0]
+            z_arr = table[1:,1:]
+
+            total_mass = np.sum(z_arr)
+
+
+
+            times.append(time_)
+            total_masses.append(total_mass)
+
+        times, total_masses = x_y_z_sort(times, total_masses)
+
+        inv_total_masses = []
+        for it in self.data.list_iterations:
+
+            table = self.data.get_res_corr(int(it), "inv_ang_mom_flux", "dens_unb_bern")
+            # time_ = self.get_time(int(it))
+
+            table = np.array(table)
+            # table[0, 1:] = table[0, 1:] * 6.176269145886162e+17
+
+            x_arr = table[0,1 :] #* 6.176269145886162e+17
+            y_arr = table[1:, 0]
+            z_arr = table[1:,1:]
+
+            inv_total_mass = np.sum(z_arr)
+
+
+
+            # times.append(time_)
+            inv_total_masses.append(inv_total_mass)
+
+        times, total_masses, inv_total_masses = x_y_z_sort(times, total_masses, inv_total_masses, 0)
+
+        masses = []
+        for it in self.data.list_iterations:
+            mass = float(np.loadtxt(Paths.ppr_sims+sim+'/res_3d/'+str(int(it))+"/disk_mass.txt", unpack=True))
+            masses.append(mass)
+
+
+        masses = np.array(masses)
+        times = np.array(times)
+        inv_total_masses = np.array(inv_total_masses)
+        total_masses = np.array(total_masses)
+
+
+        plt.plot(times, masses/10., '-', color="black", label="Disk Mass * 0.1")
+        plt.plot(times, total_masses, '.', color="black")
+        plt.plot(times, inv_total_masses, '.', color="gray")
+        plt.ylabel(r'$\sum(Jflux\_vs\_Dens\_unb\_bern)$', fontsize=12)
+        plt.xlabel(r'time [s]', fontsize=12)
+        plt.minorticks_on()
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=12)
+        plt.title('Mass Flux', fontsize=20)
+        plt.legend(loc='upper right', numpoints=1)
+        plt.savefig(Paths.ppr_sims+sim+"/res_3d/"+"test_total_ang_mom_flux.png", bbox_inches='tight', dpi=128)
+        plt.close()
+
+    def plot_summed_correlation_density_modes_with_time(self):
+        """
+            this is temporatry function meade to show the summed histograms in ang_mom_flux_dens_unb_bern
+            space
+
+        :return:
+        """
+        times = []
+        total_masses = []
+        for it in self.data.list_iterations:
+
+            table = self.data.get_res_corr(int(it), "ang_mom_flux", "dens_unb_bern")
+            time_ = self.data.get_time(int(it))
+
+            table = np.array(table)
+            # table[0, 1:] = table[0, 1:] * 6.176269145886162e+17
+
+            x_arr = table[0,1 :] #* 6.176269145886162e+17
+            y_arr = table[1:, 0]
+            z_arr = table[1:,1:]
+
+            total_mass = np.sum(z_arr)
+
+
+
+            times.append(time_)
+            total_masses.append(total_mass)
+
+        times, total_masses = x_y_z_sort(times, total_masses)
+
+        inv_total_masses = []
+        for it in self.data.list_iterations:
+
+            table = self.data.get_res_corr(int(it), "inv_ang_mom_flux", "dens_unb_bern")
+            # time_ = self.get_time(int(it))
+
+            table = np.array(table)
+            # table[0, 1:] = table[0, 1:] * 6.176269145886162e+17
+
+            x_arr = table[0,1 :] #* 6.176269145886162e+17
+            y_arr = table[1:, 0]
+            z_arr = table[1:,1:]
+
+            inv_total_mass = np.sum(z_arr)
+
+
+
+            # times.append(time_)
+            inv_total_masses.append(inv_total_mass)
+
+        times, total_masses, inv_total_masses = x_y_z_sort(times, total_masses, inv_total_masses, 0)
+
+        masses = []
+        for it in self.data.list_iterations:
+            mass = float(np.loadtxt(Paths.ppr_sims+sim+'/res_3d/'+str(int(it))+"/disk_mass.txt", unpack=True))
+            masses.append(mass)
+
+
+        masses = np.array(masses)
+        times = np.array(times)
+        inv_total_masses = np.array(inv_total_masses)
+        total_masses = np.array(total_masses)
+
+
+
+
+
+
+
+        plt.plot(times, masses/10., '-', color="black", label="Disk Mass * 0.1")
+        plt.plot(times, total_masses, '.', color="black")
+        plt.plot(times, inv_total_masses, '.', color="gray")
+        plt.ylabel(r'$\sum(Jflux\_vs\_Dens\_unb\_bern)$', fontsize=12)
+        plt.xlabel(r'time [s]', fontsize=12)
+        plt.minorticks_on()
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=12)
+        plt.title('Mass Flux', fontsize=20)
+        plt.legend(loc='upper right', numpoints=1)
+        plt.savefig(Paths.plots+"test_total_ang_mom_flux.png", bbox_inches='tight', dpi=128)
+        plt.close()
+
+
+
+
+# class PLOT_MANY_TASKS(PLOT_TASK):
+#
+#     def __init__(self, o_data_class, plot_type):
+#
+#         PLOT_TASK.__init__(self, o_data_class, plot_type)
+#         it = 1818738
+#
+#         self.data = o_data_class
+#
+#         self.gen_set = {
+#             "figdir": Paths.ppr_sims + self.data.sim + "/res_3d/{}/".format(it),
+#             "figname": "inv_ang_mom_flux.png",
+#             # "figsize": (13.5, 3.5), # <->, |
+#             "figsize": (3.8, 3.5),  # <->, |
+#             "type": "cartesian",
+#             "subplots_adjust_h": 0.2,
+#             "subplots_adjust_w": 0.3
+#         }
+#
+#         self.set_plot_dics = []
+#
+#         corr_dic_temp_Ye = { # relies on the "get_res_corr(self, it, v_n): " method of data object
+#             'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar': 'right .05 .0',
+#             'it': 2237972, 'v_n_x': 'temp', 'v_n_y': 'Ye', 'v_n': 'mass',
+#             'xmin': 2., 'xmax': 15., 'ymin': 0., 'ymax': 0.2, 'vmin': 1e-4, 'vmax': None,
+#             'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+#         }
+#         # self.set_plot_dics.append(corr_dic_temp_Ye)
+#
+#         corr_dic_rho_ang_mom = { # relies on the "get_res_corr(self, it, v_n): " method of data object
+#             'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar':  'right .05 .0',
+#             'it': 761856, 'v_n_x': 'rho', 'v_n_y': 'ang_mom', 'v_n': 'mass',
+#             'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'vmin': 1e-8, 'vmax': None,
+#             'xscale':'log', 'yscale':'log',
+#             'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+#         }
+#         # self.set_plot_dics.append(corr_dic_rho_ang_mom)
+#
+#         corr_dic_rho_dens_unb_bern = { # relies on the "get_res_corr(self, it, v_n): " method of data object
+#             'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar':  None, #  'right .05 .0',
+#             'it': 1081344, 'v_n_x': 'rho', 'v_n_y': 'dens_unb_bern', 'v_n': 'mass',
+#             'xmin': None, 'xmax': None, 'ymin': None, 'ymax': 1e-3, 'vmin': 1e-7, 'vmax': None,
+#             'xscale':'log', 'yscale':'log',
+#             'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+#         }
+#         # self.set_plot_dics.append(corr_dic_rho_dens_unb_bern)
+#
+#         corr_dic_ang_mom_flux_theta = { # relies on the "get_res_corr(self, it, v_n): " method of data object
+#             'name': 'corr', 'position': (1, 3), 'title': 'time [ms]', 'cbar':  None, #'right .05 .0',
+#             'it': it, 'v_n_x': 'theta', 'v_n_y': 'ang_mom_flux', 'v_n': 'mass',
+#             'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'vmin': 1e-7, 'vmax': None,
+#             'xscale':'line', 'yscale':'log',
+#             'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+#         }
+#         # self.set_plot_dics.append(corr_dic_ang_mom_flux_theta)
+#
+#         corr_dic_ang_mom_flux_dens_unb_bern = { # relies on the "get_res_corr(self, it, v_n): " method of data object
+#             'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar': 'right .03 .0',
+#             'it': it, 'v_n_x': 'dens_unb_bern', 'v_n_y': 'ang_mom_flux', 'v_n': 'mass',
+#             'xmin': 1e-11, 'xmax': 1e-7, 'ymin': 1e-11, 'ymax': 1e-7, 'vmin': 1e-7, 'vmax': None,
+#             'xscale':'log', 'yscale':'log',
+#             'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+#         }
+#         # self.set_plot_dics.append(corr_dic_ang_mom_flux_dens_unb_bern)
+#
+#         corr_dic_inv_ang_mom_flux_dens_unb_bern = { # relies on the "get_res_corr(self, it, v_n): " method of data object
+#             'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar': 'right .03 .0',
+#             'it': it, 'v_n_x': 'dens_unb_bern', 'v_n_y': 'inv_ang_mom_flux', 'v_n': 'mass',
+#             'xmin': 1e-11, 'xmax': 1e-7, 'ymin': 1e-11, 'ymax': 1e-7, 'vmin': 1e-7, 'vmax': None,
+#             'xscale':'log', 'yscale':'log',
+#             'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+#         }
+#         # self.set_plot_dics.append(corr_dic_inv_ang_mom_flux_dens_unb_bern)
+#
+#         corr_dic_rho_ang_mom_flux = { # relies on the "get_res_corr(self, it, v_n): " method of data object
+#             'name': 'corr', 'position': (1, 2), 'title': 'time [ms]', 'cbar':  'right .05 .0',
+#             'it': it, 'v_n_x': 'rho', 'v_n_y': 'ang_mom_flux', 'v_n': 'mass',
+#             'xmin': None, 'xmax': None, 'ymin': None, 'ymax': 1e-3, 'vmin': 1e-7, 'vmax': None,
+#             'xscale':'log', 'yscale':'log',
+#             'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+#         }
+#         # self.set_plot_dics.append(corr_dic_rho_ang_mom_flux)
+#
+#         corr_dic_rho_theta = { # relies on the "get_res_corr(self, it, v_n): " method of data object
+#             'name': 'corr', 'position': (1, 2), 'title': 'time [ms]', 'cbar':None, #   'right .05 .0',
+#             'it': it, 'v_n_x': 'theta', 'v_n_y': 'rho', 'v_n': 'mass',
+#             'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'vmin': 1e-7, 'vmax': None,
+#             'xscale': 'line', 'yscale': 'log',
+#             'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+#         }
+#         # self.set_plot_dics.append(corr_dic_rho_theta)
+#
+#         corr_dic_rho_r = { # relies on the "get_res_corr(self, it, v_n): " method of data object
+#             'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar': None,#  'right .05 .0',
+#             'it': it, 'v_n_x': 'r', 'v_n_y': 'rho', 'v_n': 'mass',
+#             'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'vmin': 1e-7, 'vmax': None,
+#             'xscale': 'line', 'yscale': 'log',
+#             'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+#         }
+#         # self.set_plot_dics.append(corr_dic_rho_r)
+#
+#         corr_dic_rho_Ye = { # relies on the "get_res_corr(self, it, v_n): " method of data object
+#             'name': 'corr', 'position': (1, 2), 'title': 'time [ms]', 'cbar': 'right .05 .0',
+#             'it': it, 'v_n_x': 'rho', 'v_n_y': 'Ye', 'v_n': 'mass',
+#             'xmin': None, 'xmax': None, 'ymin': 0., 'ymax': 0.4, 'vmin': 1e-8, 'vmax': None,
+#             'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+#         }
+#         # self.set_plot_dics.append(corr_dic_rho_Ye)
+#
+#
+#         int_ang_mom_flux_dic = {
+#             'name': 'int', 'position': (1, 1), 'title': 'time [ms]', 'cbar': 'right .03 .0',
+#             'it': it, 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'amg_mom_flux',
+#             'rmin': 0, 'rmax': 50., 'ymin': None, 'ymax': None, 'vmin': -5e-6, 'vmax': 5e-6,
+#             'xscale': None, 'yscale': None,
+#             'mask_below': None, 'mask_above': None, 'cmap': 'RdBu_r', 'norm': 'log', 'todo': None
+#         }
+#
+#
+#     def set_ncols_nrows(self):
+#
+#         tmp_rows = []
+#         tmp_cols = []
+#
+#         for dic in self.set_plot_dics:
+#             tmp_cols.append(dic['position'][1])
+#             tmp_rows.append(dic['position'][0])
+#
+#         max_row = max(tmp_rows)
+#         max_col = max(tmp_cols)
+#
+#         for row in range(1, max_row):
+#             if not row in tmp_rows:
+#                 raise NameError("Please set vertical plot position in a subsequent order: 1,2,3... not 1,3...")
+#
+#         for col in range(1, max_col):
+#             if not col in tmp_cols:
+#                 raise NameError("Please set horizontal plot position in a subsequent order: 1,2,3... not 1,3...")
+#
+#         print("Set {} rows {} columns (total {}) of plots".format(max_row, max_col, len(self.set_plot_dics)))
+#
+#         return int(max_row), int(max_col)
+#
+#     def set_plot_dics_matrix(self):
+#
+#         plot_dic_matrix = [[0
+#                              for x in range(self.n_rows)]
+#                              for y in range(self.n_cols)]
+#
+#         # get a matrix of dictionaries describing plots (for ease of representation)
+#         for dic in self.set_plot_dics:
+#             col, row = int(dic['position'][1]-1), int(dic['position'][0]-1) # -1 as position starts with 1
+#             # print(col, row)
+#             for n_row in range(self.n_rows):
+#                 for n_col in range(self.n_cols):
+#                     if int(col) == int(n_col) and int(row) == int(n_row):
+#                         plot_dic_matrix[n_col][n_row] = dic
+#                         # print('adding {} {}'.format(col, row))
+#
+#             if isinstance(plot_dic_matrix[col][row], int):
+#                 raise ValueError("Dictionary to found for n_row {} n_col {} in "
+#                                  "creating matrix of dictionaries".format(col, row))
+#
+#         return plot_dic_matrix
+#
+#     def set_plot_matrix(self):
+#
+#         fig = plt.figure(figsize=self.gen_set['figsize'])  # (<->; v)
+#
+#
+#         if self.gen_set['type'] == 'cartesian':
+#             # initializing the matrix with dummy axis objects
+#             sbplot_matrix = [[fig.add_subplot(self.n_rows, self.n_cols, 1)
+#                                   for x in range(self.n_rows)]
+#                                   for y in range(self.n_cols)]
+#
+#             i = 1
+#             for n_row in range(self.n_rows):
+#                 for n_col in range(self.n_cols):
+#
+#                     if n_col == 0 and n_row == 0:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i)
+#                     elif n_col == 0 and n_row > 0:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+#                                                                       )#sharex=self.sbplot_matrix[n_col][0])
+#                     elif n_col > 0 and n_row == 0:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+#                                                                       )#sharey=self.sbplot_matrix[0][n_row])
+#                     else:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+#                                                                       #sharex=self.sbplot_matrix[n_col][0],
+#                                                                       )#sharey=self.sbplot_matrix[0][n_row])
+#
+#                         # sbplot_matrix[n_col][n_row].axes.get_yaxis().set_visible(False)
+#                     # sbplot_matrix[n_col][n_row] = fig.add_subplot(n_rows, n_cols, i)
+#                     i += 1
+#
+#         elif self.gen_set['type'] == 'polar':
+#             # initializing the matrix with dummy axis objects
+#             sbplot_matrix = [[fig.add_subplot(self.n_rows, self.n_cols, 1, projection='polar')
+#                                   for x in range(self.n_rows)]
+#                                   for y in range(self.n_cols)]
+#
+#             i = 1
+#             for n_row in range(self.n_rows):
+#                 for n_col in range(self.n_cols):
+#
+#                     if n_col == 0 and n_row == 0:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+#                     elif n_col == 0 and n_row > 0:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+#                                                                       # sharex=self.sbplot_matrix[n_col][0])
+#                     elif n_col > 0 and n_row == 0:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+#                                                                       # sharey=self.sbplot_matrix[0][n_row])
+#                     else:
+#                         sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+#                                                                       # sharex=self.sbplot_matrix[n_col][0],
+#                                                                       # sharey=self.sbplot_matrix[0][n_row])
+#
+#                         # sbplot_matrix[n_col][n_row].axes.get_yaxis().set_visible(False)
+#                     # sbplot_matrix[n_col][n_row] = fig.add_subplot(n_rows, n_cols, i)
+#                     i += 1
+#         else:
+#             raise NameError("type of the plot is not recognized. Use 'polar' or 'cartesian' ")
+#
+#         return fig, sbplot_matrix
+#
+#     def plot_one_task(self, ax, dic):
+#
+#         if dic["name"] == "corr" or dic["name"] == "int":
+#             im = self.plot_x_y_z2d_colormesh(ax, dic)
+#         elif dic["name"] == "count":
+#             self.plot_countours(ax, dic)
+#             im = 0
+#         elif dic["name"] == 'densmode':
+#             self.plot_density_mode(ax, dic)
+#             im = 0
+#         else:
+#             raise NameError("name:{} is not recognized"
+#                             .format(dic["name"]))
+#
+#         # self.time
+#         return im
+#
+#     def set_plot_title(self, ax, plot_dic):
+#         if plot_dic["title"] != '' and plot_dic["title"] != None:
+#
+#             if plot_dic["title"] == 'it':
+#                 title = plot_dic["it"]
+#             elif plot_dic["title"] == 'time [s]' or \
+#                 plot_dic["title"] == 'time':
+#                 title = "%.3f" % self.data.get_time(plot_dic["it"]) + " [s]"
+#             elif plot_dic["title"] == 'time [ms]':
+#                 title = "%.1f" % (self.data.get_time(plot_dic["it"]) * 1000) + " [ms]"
+#             else:
+#                 title = plot_dic["title"]
+#             ax.title.set_text(r'{}'.format(title))
+#
+#     def plot_images(self):
+#
+#         # initializing the matrix of images for colorbars (if needed)
+#         image_matrix = [[0
+#                         for x in range(self.n_rows)]
+#                         for y in range(self.n_cols)]
+#
+#         # for n_row in range(self.n_rows):
+#         #     for n_col in range(self.n_cols):
+#         #         print("Plotting n_row:{} n_col:{}".format(n_row, n_col))
+#         #         ax = self.sbplot_matrix[n_col][n_row]
+#         #         dic = self.plot_dic_matrix[n_col][n_row]
+#         #         if isinstance(dic, int):
+#         #             Printcolor.yellow("Dictionary for row:{} col:{} not set".format(n_row, n_col))
+#         #             self.fig.delaxes(ax) # delets the axis for empty plot
+#         #         else:
+#         #             dic = dict(dic)
+#         #             im = self.plot_one_task(ax, dic)
+#         #             self.set_plot_title(ax, dic)
+#         #             image_matrix[n_col][n_row] = im
+#
+#         for n_row in range(self.n_rows):
+#             for n_col in range(self.n_cols):
+#                 for dic in self.set_plot_dics:
+#                     if n_col + 1 == int(dic['position'][1]) and n_row + 1 == int(dic['position'][0]):
+#                         print("Plotting n_row:{} n_col:{}".format(n_row, n_col))
+#                         ax = self.sbplot_matrix[n_col][n_row]
+#                         # dic = self.plot_dic_matrix[n_col][n_row]
+#                         if isinstance(dic, int):
+#                             Printcolor.yellow("Dictionary for row:{} col:{} not set".format(n_row, n_col))
+#                             self.fig.delaxes(ax)  # delets the axis for empty plot
+#                         else:
+#                             dic = dict(dic)
+#                             im = self.plot_one_task(ax, dic)
+#                             self.set_plot_title(ax, dic)
+#                             if not isinstance(im, int):
+#                                 image_matrix[n_col][n_row] = im
+#
+#
+#         return image_matrix
+#
+#     def plot_one_cbar(self, im, dic, n_row, n_col):
+#
+#         if dic["cbar"] != None and dic["cbar"] != '':
+#
+#             location = dic["cbar"].split(' ')[0]
+#             shift_h = float(dic["cbar"].split(' ')[1])
+#             shift_w = float(dic["cbar"].split(' ')[2])
+#             cbar_width = 0.02
+#
+#
+#             if location == 'right':
+#                 ax_to_use = self.sbplot_matrix[-1][n_row]
+#                 pos1 = ax_to_use.get_position()
+#                 pos2 = [pos1.x0 + pos1.width + shift_h,
+#                         pos1.y0,
+#                         cbar_width,
+#                         pos1.height]
+#             elif location == 'left':
+#                 ax_to_use = self.sbplot_matrix[-1][n_row]
+#                 pos1 = ax_to_use.get_position()
+#                 pos2 = [pos1.x0 - pos1.width - shift_h,
+#                         pos1.y0,
+#                         cbar_width,
+#                         pos1.height]
+#             elif location == 'bottom':
+#                 ax_to_use = self.sbplot_matrix[n_col][-1]
+#                 pos1 = ax_to_use.get_position()
+#                 pos2 = [pos1.x0,
+#                         pos1.y0 - pos1.height + shift_w,
+#                         cbar_width,
+#                         pos1.height]
+#             else:
+#                 raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
+#                                 .format(location))
+#
+#             cax1 = self.fig.add_axes(pos2)
+#             if location == 'right':
+#                 cbar = plt.colorbar(im, cax=cax1, extend='both')#, format='%.1e')
+#             elif location == 'left':
+#                 cbar = plt.colorbar(im, cax=cax1, extend='both')#, format='%.1e')
+#                 cax1.yaxis.set_ticks_position('left')
+#                 cax1.yaxis.set_label_position('left')
+#             else:
+#                 raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
+#                                 .format(location))
+#             cbar.ax.set_title(r"{}".format(str(dic["v_n"]).replace('_', '\_')))
+#
+#     def plot_colobars(self):
+#
+#         for n_row in range(self.n_rows):
+#             for n_col in range(self.n_cols):
+#                 for dic in self.set_plot_dics:
+#                     if n_col + 1 == int(dic['position'][1]) and n_row + 1 == int(dic['position'][0]):
+#                         print("Colobar for n_row:{} n_col:{}".format(n_row, n_col))
+#                         # ax  = self.sbplot_matrix[n_col][n_row]
+#                         # dic = self.plot_dic_matrix[n_col][n_row]
+#                         im  = self.image_matrix[n_col][n_row]
+#                         if isinstance(dic, int):
+#                             Printcolor.yellow("Dictionary for row:{} col:{} not set".format(n_row, n_col))
+#                         else:
+#                             self.plot_one_cbar(im, dic, n_row, n_col)
+#
+#
+#         # for n_row in range(self.n_rows):
+#         #     for n_col in range(self.n_cols):
+#         #         print("Colobar for n_row:{} n_col:{}".format(n_row, n_col))
+#         #         # ax  = self.sbplot_matrix[n_col][n_row]
+#         #         dic = self.plot_dic_matrix[n_col][n_row]
+#         #         im  = self.image_matrix[n_col][n_row]
+#         #         if isinstance(dic, int):
+#         #             Printcolor.yellow("Dictionary for row:{} col:{} not set".format(n_row, n_col))
+#         #         else:
+#         #             self.plot_one_cbar(im, dic, n_row, n_col)
+#
+#     def save_plot(self):
+#
+#         plt.subplots_adjust(hspace=self.gen_set["subplots_adjust_h"])
+#         plt.subplots_adjust(wspace=self.gen_set["subplots_adjust_w"])
+#         # plt.tight_layout()
+#         plt.savefig('{}{}'.format(self.gen_set["figdir"], self.gen_set["figname"]),
+#                     bbox_inches='tight', dpi=128)
+#         plt.close()
+#
+#     def main(self):
+#
+#         # initializing the n_cols, n_rows
+#         self.n_rows, self.n_cols = self.set_ncols_nrows()
+#         # initializing the matrix of dictionaries of the
+#         self.plot_dic_matrix = self.set_plot_dics_matrix()
+#         # initializing the axis matrix (for all subplots) and image matrix fo colorbars
+#         self.fig, self.sbplot_matrix = self.set_plot_matrix()
+#         # plotting
+#         self.image_matrix = self.plot_images()
+#         # adding colobars
+#         self.plot_colobars()
+#
+#
+#         # saving the result
+#         self.save_plot()
+
+""" --- --- LOADING & PLOTTING R-phi Phi-Z --- ---"""
 
 
 
@@ -1877,10 +2550,19 @@ class LOAD_INT_DATA:
 
 def do_histogram_processing_of_iterations():
 
-    sim = "DD2_M13641364_M0_SR"
-    profs_loc = "/data/numrel/WhiskyTHC/Backup/2018/GW170817/DD2_M13641364_M0_SR/profiles/3d/"
+    sim =  "LS220_M13641364_M0_SR" #"SLy4_M13641364_M0_SR" # "DD2_M13641364_M0_SR"
+    profs_loc = "/data/numrel/WhiskyTHC/Backup/2018/GW170817/{}/profiles/3d/".format(sim)
 
-    list_iterations, times = np.loadtxt(profs_loc+"ittime.txt", usecols=(0, 1), unpack=True)
+    out_dir = Paths.ppr_sims + sim + "/res_3d/"
+
+    if not os.path.isdir(out_dir):
+        os.mkdir(out_dir)
+
+
+
+    list_iterations = np.array(get_list_iterationsfrom_profiles_3d(sim, in_sim_dir="/profiles/3d/"))
+    times = interpoate_time_form_it(list_iterations, Paths.gw170817 + sim + '/')
+
     iterations = list_iterations[times>0.030]
     # print(iterations)
     # exit(1)
@@ -1889,11 +2571,13 @@ def do_histogram_processing_of_iterations():
     for it in np.array(iterations, dtype=int):
         print("| processing iteration: {} ({} out {})|".format(it, len(processed), len(iterations)))
         o_methods = MAINMETHODS_STORE(profs_loc+"{}.h5".format(it), sim)
+        # o_methods.mask_setup["ang_mom_flux"] = [1e-12, 1.] # set a ADDITIONAL LIMIT
         #
         o_methods.get_total_mass(save=True)
         print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_ye, save=True)))
         print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_temp_ye, save=True)))
         print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_r, save=True)))
+        # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_r_phi, save=True)))
         print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_theta, save=True)))
         print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_ang_mom, save=True)))
         print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_ang_mom_flux, save=True)))
@@ -1901,17 +2585,710 @@ def do_histogram_processing_of_iterations():
         print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_ang_mom_flux_theta, save=True)))
         print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_ang_mom_flux_dens_unb_bern, save=True)))
         print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_inv_ang_mom_flux_dens_unb_bern, save=True)))
+        ### -- 3D
+        # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_r_phi_ang_mom_flux, save=True)))
+
         o_methods.__delete__(o_methods)
         processed.append(it)
+
+        # exit(1)
+
+    for it in np.array(iterations, dtype=int):
+        print("| processing iteration: {} ({} out {})|".format(it, len(processed), len(iterations)))
+        o_methods = MAINMETHODS_STORE(profs_loc+"{}.h5".format(it), sim)
+        o_methods.mask_setup["ang_mom_flux"] = [1e-12, 1.] # set a ADDITIONAL LIMIT for POSITIVE Jf
+        #
+        o_methods.get_total_mass(save=False)
+
+        print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_r_phi, save=True)))
+
+        o_methods.__delete__(o_methods)
+        processed.append(it)
+
+
+    exit(1)
+
+def do_produce_interpolated_data_for_iterations():
+    """
+    For all iterations (looks into the folders inside res_3d/ for list of them
+    :return:
+    """
+
+    sim = "LS220_M13641364_M0_SR"
+    profs_loc = "/data/numrel/WhiskyTHC/Backup/2018/GW170817/{}/profiles/3d/".format(sim)
+
+    list_iterations = get_list_iterationsfrom_profiles_3d(sim, in_sim_dir="/profiles/3d/")
+    times = np.array(interpoate_time_form_it(list_iterations, path_to_sim=Paths.gw170817 + sim + '/'))
+    if len(times) == 0:
+        raise ValueError("Times not found.")
+
+    print(list_iterations)
+    print(times)
+    iterations = np.array(list_iterations)#[(times > 0.020) & (times < 0.020)]
+
+    _, _, task_for_int = setup()
+    processed = []
+
+    if click.confirm('Itertation: {} wish to continue?'.format(len(iterations)), default=True):
+
+        for it in np.array(iterations, dtype=int):
+            print("| interpolating iteration: {} ({} out {})|".format(it, len(processed), len(iterations)))
+
+            int_ = INTMETHODS_STORE(profs_loc+"{}.h5".format(it), sim,
+                                    CYLINDRICAL_GRID(task_for_int["grid"]))
+
+            # int_.save_int_v_n("lapse", overwrite=False)
+            int_.save_int_v_n("vr", overwrite=False)
+            # int_.save_int_v_n("density", overwrite=False)
+            # int_.save_int_v_n("ang_mom_flux", overwrite=False)
+            # int_.save_int_v_n("dens_unb_bern", overwrite=False)
+            # int_.save_int_v_n("rho", overwrite=False)
+
+            processed.append(it)
+            if it == np.array(iterations, int).max():
+                int_.save_new_grid()
+
+    print("All done")
+    exit(0)
+
+def do_compute_save_all_modes_for_all_it():
+
+
+    print('-' * 20 + 'COMPUTING DENSITY MODES' + '-' * 20)
+
+    sim = "DD2_M13641364_M0_SR"
+    o_dm = COMPUTE_STORE_DESITYMODES(sim)
+    # assume that the intepolated grid is the same for all the iterations
+    o_dm.flag_force_unique_grid = True
+    # o_dm.it_for_unique_grid = '' # 2254356
+    # setting the mode list to be computed
+    o_dm.list_modes = [0,1,2,3,4,5,6]
+    o_dm.gen_set["do_norm"] = False # do not normalize
+
+    r_cyl = o_dm.get_grid_data(o_dm.it_for_unique_grid, "r_cyl")
+    r_cyl = np.array(r_cyl[:, 0, 0]).flatten() # 1d
+
+
+    # print(o_dm.get_data(669810, "density")); exit(1)
+    # print(o_dm.get_grid_data(669810, "dz_cyl").shape)
+    # print(o_dm.get_density_mode(669810, 1, "int_phi")); exit(1)
+    # print(r_cyl); exit(1)
+
+
+    outpath = Paths.ppr_sims + sim + "/res_3d/"
+    outfname = "density_modes.h5"
+    dfile = h5py.File(outpath + outfname, "w")
+    dfile.create_dataset("r_cyl", data=r_cyl)
+
+    for mode in o_dm.list_modes:
+        int_phi_all = []
+        int_phi_r_all = []
+        times = []
+        iterations = []
+        for it, time_ in zip(o_dm.list_iterations,
+                             interpoate_time_form_it(o_dm.list_iterations, Paths.gw170817 + sim + '/')):
+            try:
+                print("\tComputing m:{:d} it:{:d}".format(mode, it))
+                int_phi_all.append(o_dm.get_density_mode(it, mode, "int_phi"))
+                int_phi_r_all.append(o_dm.get_density_mode(it, mode, "int_phi_r"))
+                times.append(time_)
+                iterations.append(it)
+            except ValueError:
+                Printcolor.yellow("Warning. it:{} failed with ValueError".format(it))
+            except IOError:
+                Printcolor.yellow("Warning. it:{} failed with IOError".format(it))
+
+        # print(np.array(int_phi_all).shape, np.array(iterations).shape, np.array(r_cyl).shape)
+        int_phi_reshaped = np.reshape(np.array(int_phi_all), (len(iterations), len(r_cyl)))
+        group = dfile.create_group("m=%d" % mode)
+        group["int_phi"] = int_phi_reshaped
+        group["int_phi_r"] = np.array(int_phi_r_all).flatten()
+
+    dfile.create_dataset("iterations", data=np.array(iterations, dtype=int).flatten())
+    dfile.create_dataset("times", data=np.array(times, dtype=float).flatten())
+    print('-' * 25 + '------DONE-----' + '-' * 25)
+
+    exit(0)
+
+def plot_density_modes_old(load_file="density_modes.h5"):
+
+    sim = "DD2_M13641364_M0_LK_HR_R04"
+    m_list = [1,2]
+
+
+    dfile = h5py.File(Paths.ppr_sims + sim + '/res_3d/' + load_file, "r")
+
+    rows = 2
+    cols = 1
+
+    fig = plt.figure(figsize=(6.5, 1.5 * 3.6))  # figsize=(4.5, 2.5 * 3.6)  # (<->; v)
+    ax_list = []
+    for n in range(1, rows + 1):
+        if n == 1:
+            ax_list.append(fig.add_subplot(rows, cols, n))
+        else:
+            ax_list.append(fig.add_subplot(rows, cols, n, sharex=ax_list[n - 2]))  # sharex=axs[n - 2]))
+
+
+    times = np.array(dfile["times"])
+    iterations = np.array(dfile["iterations"])
+    r_cyl = np.array(dfile["r_cyl"])
+
+    for m in m_list:
+
+        if m == 1:
+            color = 'black'; ls = '-'; lw = 1.
+        elif m == 2:
+            color = 'gray';  ls = '-.'; lw = 1.
+        elif m == 3:
+            color = 'blue';  ls = '-.'; lw = 0.4
+        elif m == 4:
+            color = 'orange';  ls = '-.'; lw = 0.4
+        elif m == 5:
+            color = 'green';  ls = '-.'; lw = 0.4
+        elif m == 6:
+            color = 'pink';  ls = '-.'; lw = 0.4
+        elif m == 7:
+            color = 'purple';  ls = '-.'; lw = 0.4
+        else:
+            raise ValueError('m is not in color/ls list')
+
+        group = dfile["m=%d" % m]
+        int_phi2d = np.array(group["int_phi"])
+        int_phi_r1d = np.array(group["int_phi_r"])  # | time   <-> r
+        # times = np.array(group["times"])
+        # r = np.array(group["r_cyl"])
+
+        # phase plot
+        ax_list[0].plot(times * 1e3, np.unwrap(np.angle(int_phi_r1d)), ls, lw=lw, color=color, label='m:{}'.format(m))
+
+        ax_list[0].set_ylabel(r'$C_m/C_0$ Phase')
+        # ax_list[0].annotate(r'$C_m = \int{\rho W \sqrt{-g}\cdot\exp(i m \phi) dz dr d\phi}$',
+        #             xy=(-150 / 180 * np.pi, 50),  # theta, radius
+        #             xytext=(0.65, 0.90),  # fraction, fraction
+        #             xycoords='axes fraction',
+        #             horizontalalignment='center',
+        #             verticalalignment='center'
+        #             )
+        ax_list[0].legend()
+
+        # magnitude plot
+        ax_list[1].plot(times * 1e3, np.abs(int_phi_r1d), ls, lw=lw, color=color, label='m:{}'.format(m))
+
+        ax_list[1].set_yscale('log')
+        ax_list[1].set_ylabel(r'$C_m/C_0$ Magnitude')
+        ax_list[1].legend()
+
+    plt.savefig(Paths.ppr_sims + sim + '/res_3d/' + load_file.replace(".h5", ".png"), bbox_inches='tight', dpi=128)
+    plt.close()
+    exit(0)
+
+def plot_density_modes(load_file="density_modes.h5"):
+
+    sim = "DD2_M13641364_M0_LK_HR_R04"
+    m_list = [1,2]
+
+
+    dfile = h5py.File(Paths.ppr_sims + sim + '/res_3d/' + load_file, "r")
+
+    rows = 2
+    cols = 1
+
+    fig = plt.figure(figsize=(6.5, 1.5 * 3.6))  # figsize=(4.5, 2.5 * 3.6)  # (<->; v)
+    ax_list = []
+    for n in range(1, rows + 1):
+        if n == 1:
+            ax_list.append(fig.add_subplot(rows, cols, n))
+        else:
+            ax_list.append(fig.add_subplot(rows, cols, n, sharex=ax_list[n - 2]))  # sharex=axs[n - 2]))
+
+
+    times = np.array(dfile["times"])
+    iterations = np.array(dfile["iterations"])
+    r_cyl = np.array(dfile["r_cyl"])
+
+    for m in m_list:
+
+        if m == 1:
+            color = 'black'; ls = '-'; lw = 1.
+        elif m == 2:
+            color = 'gray';  ls = '-.'; lw = 1.
+        elif m == 3:
+            color = 'blue';  ls = '-.'; lw = 0.4
+        elif m == 4:
+            color = 'orange';  ls = '-.'; lw = 0.4
+        elif m == 5:
+            color = 'green';  ls = '-.'; lw = 0.4
+        elif m == 6:
+            color = 'pink';  ls = '-.'; lw = 0.4
+        elif m == 7:
+            color = 'purple';  ls = '-.'; lw = 0.4
+        else:
+            raise ValueError('m is not in color/ls list')
+
+        group = dfile["m=%d" % m]
+        int_phi2d = np.array(group["int_phi"])
+        int_phi_r1d = np.array(group["int_phi_r"])  # | time   <-> r
+        # times = np.array(group["times"])
+        # r = np.array(group["r_cyl"])
+
+        # phase plot
+        ax_list[0].plot(times * 1e3, np.unwrap(np.angle(int_phi_r1d)), ls, lw=lw, color=color, label='m:{}'.format(m))
+
+        ax_list[0].set_ylabel(r'$C_m/C_0$ Phase')
+        # ax_list[0].annotate(r'$C_m = \int{\rho W \sqrt{-g}\cdot\exp(i m \phi) dz dr d\phi}$',
+        #             xy=(-150 / 180 * np.pi, 50),  # theta, radius
+        #             xytext=(0.65, 0.90),  # fraction, fraction
+        #             xycoords='axes fraction',
+        #             horizontalalignment='center',
+        #             verticalalignment='center'
+        #             )
+        ax_list[0].legend()
+
+        # magnitude plot
+        ax_list[1].plot(times * 1e3, np.abs(int_phi_r1d), ls, lw=lw, color=color, label='m:{}'.format(m))
+
+        ax_list[1].set_yscale('log')
+        ax_list[1].set_ylabel(r'$C_m/C_0$ Magnitude')
+        ax_list[1].legend()
+
+    plt.savefig(Paths.ppr_sims + sim + '/res_3d/' + load_file.replace(".h5", ".png"), bbox_inches='tight', dpi=128)
+    plt.close()
+    exit(0)
+
+def plot_corr_ang_mom_flux_dens_unb_bern_movie():
+
+
+    sim = "DD2_M13641364_M0_LK_HR_R04"
+    movie_dir = Paths.ppr_sims + sim + "/res_3d/" + "corr_ang_mom_flux_dens_unb_bern_movie/"
+
+    if not os.path.isdir(movie_dir):
+        os.mkdir(movie_dir)
+
+    o_data = LOAD_RES_CORR(sim)
+    o_plot = PLOT_MANY_TASKS(o_data, "cartesian")
+    o_plot.gen_set["figdir"] = movie_dir
+    o_plot.gen_set["figsize"] = (7.2, 3.5)  # <->, |]
+
+
+    for it, time_ in zip(o_data.list_iterations, o_data.times):
+
+        o_plot.gen_set["figname"] = "{0:07d}.png".format(int(it))
+
+        corr_dic_ang_mom_flux_dens_unb_bern = {  # relies on the "get_res_corr(self, it, v_n): " method of data object
+            'name': 'corr', 'position': (1, 1), 'title': 'time [ms]', 'cbar': 'left .15 .0',
+            'it': it, 'v_n_x': 'dens_unb_bern', 'v_n_y': 'ang_mom_flux', 'v_n': 'mass',
+            'xmin': 1e-11, 'xmax': 1e-7, 'ymin': 1e-11, 'ymax': 1e-7, 'vmin': 1e-7, 'vmax': None,
+            'xscale': 'log', 'yscale': 'log',
+            'mask_below': None, 'mask_above': None, 'cmap': 'inferno_r', 'norm': 'log', 'todo': None
+        }
+        corr_dic_r_phi = {  # relies on the "get_res_corr(self, it, v_n): " method of data object
+            'name': 'corr', 'position': (1, 2), 'title': 'time [ms]', 'cbar': 'right .03 .0',
+            'it': it, 'v_n_x': 'phi', 'v_n_y': 'r', 'v_n': 'mass',
+            'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'vmin': 1e-6, 'vmax': None,
+            'xscale': 'line', 'yscale': 'line',
+            'mask_below': None, 'mask_above': None, 'cmap': 'inferno', 'norm': 'log', 'todo': None
+        }
+
+        o_plot.set_plot_dics = [corr_dic_ang_mom_flux_dens_unb_bern, corr_dic_r_phi]
+
+        o_plot.main()
+
+        # exit(1)
+
+def plot_ang_mom_flux_dens_unb_bern_movie():
+
+    sim = "DD2_M13641364_M0_LK_HR_R04"
+    movie_dir = Paths.ppr_sims + sim + "/res_3d/" + "ang_mom_flux_dens_unb_bern_movie/"
+
+    if not os.path.isdir(movie_dir):
+        os.mkdir(movie_dir)
+
+    o_data = LOAD_INT_DATA(sim)
+    o_data.flag_force_unique_grid = True
+    o_data.it_for_unique_grid = 1363968# 2254356
+    o_plot = PLOT_MANY_TASKS(o_data, "polar")
+    o_plot.gen_set["figdir"] = movie_dir
+    o_plot.gen_set["type"] = "polar"
+    o_plot.gen_set["figsize"] = (7.2, 3.5)  # <->, |]
+
+    for it, time in zip(o_data.list_iterations, o_data.times):
+
+        o_plot.gen_set["figname"] = "{0:07d}.png".format(int(it))
+
+        int_ang_mom_flux_dic = {
+            'name': 'int', 'position': (1, 1), 'title': 'time [ms]', 'cbar': 'left .15 .0',
+            'it': it, 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'ang_mom_flux',
+            'phimin': None, 'phimax': None, 'rmin': 0, 'rmax': 50, 'vmin': 1e-8, 'vmax': 1e-5,
+            'xscale': None, 'yscale': None,
+            'mask_below': None, 'mask_above': None, 'cmap': 'RdBu_r', 'norm': "log", 'todo': None
+        }
+        deisty_countour = {
+            'name': 'count', 'position': (1, 1), 'title': None, 'cbar': None,
+            'it': it, 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'density',
+            'phimin': None, 'phimax': None, 'rmin': 0, 'rmax': 50, 'levels': [1e-7, 1e-6, 1e-5, 1e-4, 1e-3],
+            'xscale': None, 'yscale': None,
+            'mask_below': None, 'mask_above': None, 'colors': 'gray', 'norm': "log", 'todo': None
+        }
+        densmode = {
+            'name': 'densmode', 'position': (1, 1), 'title': None, 'cbar': None,
+            'mode': 1, 'dfile': h5py.File(Paths.ppr_sims + sim + '/res_3d/' + "density_modes.h5", "r"),
+            'it': it, 'rmax': 50, 'plot_int_phi': True, 'plot_int_phi_r': True,
+        }
+
+
+        int_deisty_dic = {
+            'name': 'int', 'position': (1, 2), 'title': 'time [ms]', 'cbar': 'right .03 .0',
+            'it': it, 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'density',
+            'phimin': None, 'phimax': None, 'rmin': 0, 'rmax': 50, 'vmin': 1e-8, 'vmax': 1e-5,
+            'xscale': None, 'yscale': None,
+            'mask_below': None, 'mask_above': None, 'cmap': 'inferno', 'norm': "log", 'todo': None
+        }
+        rho_countour = {
+            'name': 'count', 'position': (1, 2), 'title': None, 'cbar': None,
+            'it': it, 'v_n_x': 'phi_cyl', 'v_n_y': 'r_cyl', 'v_n': 'rho',
+            'phimin': None, 'phimax': None, 'rmin': 0, 'rmax': 50, 'levels': [Constants.ns_rho],
+            'xscale': None, 'yscale': None,
+            'mask_below': None, 'mask_above': None, 'colors': 'gray', 'norm': "log", 'todo': None
+        }
+
+
+        o_plot.set_plot_dics = [int_ang_mom_flux_dic, densmode, int_deisty_dic, rho_countour]
+
+        o_plot.main()
+
+        # exit(1)
+
+
+def plot_max_of_corr_phi_r_density_mode_phase_for_all_it():
+
+    sim = "DD2_M13641364_M0_LK_HR_R04"
+
+    out_dir = Paths.ppr_sims + sim + "/res_3d/" + "spiral_arm_search/"
+
+    if not os.path.isdir(out_dir):
+        os.mkdir(out_dir)
+
+    o_corr = LOAD_RES_CORR(sim)
+
+    def get_all_for_r(r):
+
+        all_phi_arr = []
+        all_mass_for_r = []
+        all_times = []
+
+        for it, time_ in zip(o_corr.list_iterations, o_corr.times):
+            table = o_corr.get_res_corr(it, "r", "phi")
+            table = np.array(table)
+            r_arr = table[0, 1:]  # * 6.176269145886162e+17
+            phi_arr = table[1:, 0]
+            mass_arr = table[1:, 1:]
+            mass_arr = np.maximum(mass_arr, 1e-12)  # WHAT'S THAT?
+            phi_arr = 180 + (180 * phi_arr / np.pi)
+
+            # print(table); exit(1)
+
+            # print("r:{} phi:{} mass:{}".format(r_arr.shape, phi_arr.shape, mass_arr.shape))
+
+            r_idx = find_nearest_index(r_arr, r)
+
+            # mass_for_r = mass_arr[r_idx, :]
+            mass_for_r = mass_arr[:, r_idx] # correct
+
+            all_phi_arr = phi_arr
+            all_mass_for_r.append(mass_for_r)
+            all_times.append(time_)
+
+            # plt.plot(phi_arr, mass_for_r, '.', color="black")
+            # plt.ylabel(r'Mass [Jflux $>$ 1e-12]', fontsize=12)
+            # plt.xlabel(r'$\phi$ [deg]', fontsize=12)
+            # plt.minorticks_on()
+            # plt.yscale("log")
+            # plt.xticks(fontsize=12)
+            # plt.yticks(fontsize=12)
+            # plt.title('Spiral arm', fontsize=20)
+            # plt.legend(loc='upper right', numpoints=1)
+            # plt.savefig(Paths.ppr_sims+sim+"/res_3d/"+"spiral_arm.png", bbox_inches='tight', dpi=128)
+            # plt.close()
+
+        all_phi_arr = np.array(all_phi_arr)
+        all_mass_for_r = np.array(all_mass_for_r)
+        all_times = np.array(all_times)
+
+        all_mass_for_r = np.reshape(all_mass_for_r, (len(all_times), len(all_phi_arr)))
+
+        print("time:{} phi:{} mass:{}".format(all_times.shape, all_phi_arr.shape, all_mass_for_r.shape))
+
+        return all_phi_arr, all_times, all_mass_for_r,
+
+    def get_dens_mode(mode=1):
+
+        dfile = h5py.File(Paths.ppr_sims + sim + '/res_3d/' + "density_modes.h5", "r")
+
+
+        # dfile = h5py.File(Paths.ppr_sims + sim + '/res_3d/' + load_file, "r")
+        group = dfile["m=%d" % mode]
+        times = np.array(dfile["times"])
+        iterations = np.array(dfile["iterations"])
+        r_cyl = np.array(dfile["r_cyl"])
+
+        int_phi2d = np.array(group["int_phi"])
+        int_phi_r1d = np.array(group["int_phi_r"])
+
+        angles = np.array([np.angle(comp_mode, deg=True)+180 for comp_mode in int_phi_r1d])
+
+        # angles = np.unwrap(np.angle(int_phi_r1d, deg=True))+180
+
+        return angles, times
+
+
+
+    fig = plt.figure(figsize=(3.2, 7.6))
+
+
+    cmap = "inferno"
+    vmin = 1e-7
+    vmax = 1e-5
+
+
+    m1_phi, m1_t = get_dens_mode()
+    # ax.plot(m1_phi, m1_phi, '-', color='white')
+
+    r = 12
+    ax = fig.add_subplot(111)
+    all_phi_arr, all_times, all_mass_for_r = get_all_for_r(r)
+    norm = LogNorm(vmin=vmin, vmax=vmax)#all_mass_for_r.max())
+    im = ax.pcolormesh(all_phi_arr, all_times, all_mass_for_r, norm=norm,
+                       cmap=cmap)  # , vmin=dic["vmin"], vmax=dic["vmax"])
+    im.set_rasterized(True)
+    plt.minorticks_on()
+    ax.set_xlabel(r'$\phi$ [deg]', fontsize=12)
+    ax.set_ylabel(r'time [s]', fontsize=12)
+    ax.set_title("R:{}".format(r))
+    ax.plot(m1_phi, m1_t, '-', color='lightblue', lw=3.)
+
+    # r = 14
+    # ax = fig.add_subplot(142)
+    # all_phi_arr, all_times, all_mass_for_r = get_all_for_r(r)
+    # norm = LogNorm(vmin=vmin, vmax=vmax)#all_mass_for_r.max())
+    # im = ax.pcolormesh(all_phi_arr, all_times, all_mass_for_r, norm=norm,
+    #                    cmap=cmap)  # , vmin=dic["vmin"], vmax=dic["vmax"])
+    # im.set_rasterized(True)
+    # plt.minorticks_on()
+    # ax.set_xlabel(r'$\phi$ [deg]', fontsize=12)
+    # # ax.set_ylabel(r'time [s]', fontsize=12)
+    # ax.set_title("R:{}".format(r))
+    # ax.plot(m1_phi, m1_t, '-', color='blue')
+    #
+    # r = 16
+    # ax = fig.add_subplot(143)
+    # all_phi_arr, all_times, all_mass_for_r = get_all_for_r(r)
+    # norm = LogNorm(vmin=vmin, vmax=vmax)#all_mass_for_r.max())
+    # im = ax.pcolormesh(all_phi_arr, all_times, all_mass_for_r, norm=norm,
+    #                    cmap=cmap)  # , vmin=dic["vmin"], vmax=dic["vmax"])
+    # im.set_rasterized(True)
+    # plt.minorticks_on()
+    # ax.set_xlabel(r'$\phi$ [deg]', fontsize=12)
+    # # ax.set_ylabel(r'time [s]', fontsize=12)
+    # ax.set_title("R:{}".format(r))
+    # ax.plot(m1_phi, m1_t, '-', color='blue')
+    #
+    # r = 18
+    # ax = fig.add_subplot(144)
+    # all_phi_arr, all_times, all_mass_for_r = get_all_for_r(r)
+    # norm = LogNorm(vmin=vmin, vmax=vmax)#all_mass_for_r.max())
+    # im = ax.pcolormesh(all_phi_arr, all_times, all_mass_for_r, norm=norm,
+    #                    cmap=cmap)  # , vmin=dic["vmin"], vmax=dic["vmax"])
+    # im.set_rasterized(True)
+    # plt.minorticks_on()
+    # ax.set_xlabel(r'$\phi$ [deg]', fontsize=12)
+    # # ax.set_ylabel(r'time [s]', fontsize=12)
+    # ax.set_title("R:{}".format(r))
+    # ax.plot(m1_phi, m1_t, '-', color='blue')
+    #
+    plt.savefig(out_dir + "many_r.png", bbox_inches='tight', dpi=128)
+    plt.close()
+
+    exit(1)
+
+
+def plot_phi0_slice_Jflux_with_time():
+    sim = "DD2_M13641364_M0_SR"
+    out_dir = Paths.ppr_sims + sim + "/res_3d/" + "spiral_arm_search/"
+
+    if not os.path.isdir(out_dir):
+        os.mkdir(out_dir)
+
+    o_data = LOAD_INT_DATA(sim)
+    o_data.flag_force_unique_grid = True
+
+
+    jf_slice = []
+    times = []
+    r = []
+    for it, time_ in zip(o_data.list_iterations, o_data.times):
+        print("\tit:{} ({}/{})".format(it,len(times), len(o_data.list_iterations)))
+        times.append(time_)
+        jflux = o_data.get_int_data(it, "ang_mom_flux")
+        r = o_data.get_grid_data(it, "r_cyl")[:,0,0] # 1d r
+        jf_slice.append(jflux[:,0,0]) # slice for phiz=0 and z=0
+
+    r = np.array(r)
+    times = np.array(times)
+    jf_slice = np.array(jf_slice)
+
+    jf_slice = np.reshape(jf_slice, (len(times), len(r)))
+
+    # print(jf_slice)
+    # print('\n')
+    # print(r)
+
+    arr1 = np.ma.masked_array(jf_slice.T, jf_slice.T < 0)  # jf_slice.T[jf_slice.T>0]
+    arr2 = -1 * np.ma.masked_array(jf_slice.T, jf_slice.T > 0)
+
+    print(arr1)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(211)
+    im1 = ax.pcolormesh(times * 1e3, r, arr1, norm=LogNorm(vmin=1e-8, vmax=1e-5), cmap='Reds')
+    im2 = ax.pcolormesh(times * 1e3, r, arr2, norm=LogNorm(vmin=1e-8, vmax=1e-5), cmap='Blues')
+    ax.set_xlabel("time [ms]", fontsize=12)
+    ax.set_ylabel("radius [km]", fontsize=12)
+    ax.minorticks_on()
+    ax.set_ylim(0, 50)
+    divider1 = make_axes_locatable(ax)
+    cax = divider1.append_axes("right", size="5%", pad=0.05)
+    cbar = plt.colorbar(im1, cax=cax)
+    cbar.set_label(r"Jflux")
+    cbar.ax.minorticks_off()
+    # cbar = plt.colorbar(im, cax=cax1, extend='both')
+
+
+    ax = fig.add_subplot(212)
+    im1 = ax.pcolormesh(times * 1e3, r, arr1, norm=LogNorm(vmin=1e-12, vmax=1e-7), cmap='Reds')
+    im2 = ax.pcolormesh(times * 1e3, r, arr2, norm=LogNorm(vmin=1e-12, vmax=1e-7), cmap='Blues')
+    ax.set_xlabel("time [ms]", fontsize=12)
+    ax.set_ylabel("radius [km]", fontsize=12)
+    ax.minorticks_on()
+    divider1 = make_axes_locatable(ax)
+    cax = divider1.append_axes("right", size="5%", pad=0.05)
+    cbar = plt.colorbar(im1, cax=cax)
+    cbar.set_label(r"Jflux")
+    cbar.ax.minorticks_off()
+    ax.set_ylim(0, 500)
+
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.savefig(out_dir + 'phi_slice_with_time.png', bbox_inches='tight', dpi=128)
+    plt.close()
+    exit(1)
+
+
+""" --- --- TESTING/DEBUGGING --- --- """
+
+def compute_density_modes_from_profiles():
+
+    import numexpr as ne
+
+
+    sim = "SLy4_M13641364_M0_SR"
+    mmax = 8
+    profs_loc = "/data/numrel/WhiskyTHC/Backup/2018/GW170817/{}/profiles/3d/".format(sim)
+
+    out_dir = Paths.ppr_sims + sim + "/res_3d/"
+
+    if not os.path.isdir(out_dir):
+        os.mkdir(out_dir)
+
+
+
+    list_iterations = np.array(get_list_iterationsfrom_profiles_3d(sim, in_sim_dir="/profiles/3d/"))
+    times_ = interpoate_time_form_it(list_iterations, Paths.gw170817 + sim + '/')
+
+    iterations = list_iterations[times_>0.005]
+    # print(iterations)
+    # exit(1)
+
+
+    times = []
+    modes = [[] for m in range(mmax + 1)]
+    xcs = []
+    ycs = []
+
+    for idx, it in enumerate(iterations):
+        print("processing iteration: {}/{}".format(idx, len(iterations)))
+        o_methods = MAINMETHODS_STORE(profs_loc+"{}.h5".format(it), sim)
+
+        rl = o_methods.nlevels-1
+
+        lapse =  o_methods.get_prof_arr(rl, "lapse")[:,:,0]
+        rho = o_methods.get_prof_arr(rl, "rho")[:,:,0]
+        vol = o_methods.get_prof_arr(rl, "vol")[:,:,0]
+        w_lorentz = o_methods.get_prof_arr(rl, "w_lorentz")[:,:,0]
+
+
+        delta = o_methods.get_prof_delta(rl)[:-1]
+        # print(delta); exit(0)
+        dxyz = np.prod(delta)
+        x, y, z = o_methods.get_prof_x_y_z(rl)
+        x=x[:,:,0]
+        y=y[:,:,0]
+
+
+
+        rho[lapse < 0.15] = 0
+
+
+        # print(x); exit(1)
+
+        # Exclude region outside refinement levels
+        idx = np.isnan(rho)
+        rho[idx] = 0.0
+        vol[idx] = 0.0
+        w_lorentz[idx] = 0.0
+
+        # Compute center of mass
+        modes[0].append(dxyz * ne.evaluate("sum(rho * w_lorentz * vol)"))
+        Ix = dxyz * ne.evaluate("sum(rho * w_lorentz * vol * x)")
+        Iy = dxyz * ne.evaluate("sum(rho * w_lorentz * vol * y)")
+        xc = Ix / modes[0][-1]
+        yc = Iy / modes[0][-1]
+        phi = ne.evaluate("arctan2(y - yc, x - xc)")
+
+        xcs.append(xc)
+        ycs.append(yc)
+
+        # Extract modes
+        times.append(o_methods.time)
+        for m in range(1, mmax + 1):
+            modes[m].append(dxyz * ne.evaluate("sum(rho * w_lorentz * vol * exp(-1j * m * phi))"))
+
+    dfile = h5py.File(Paths.ppr_sims+sim+'/res_3d/density_modes_lap15.h5', "w")
+    dfile.create_dataset("times", data=times)
+    dfile.create_dataset("xc", data=xcs)
+    dfile.create_dataset("yc", data=ycs)
+    for m in range(mmax + 1):
+        group = dfile.create_group("m=%d" % m)
+        group["int_phi"] = np.zeros(0,)
+        group["int_phi_r"] = np.array(modes[m]).flatten()
+        # dfile.create_dataset(("m=%d" % m), data=modes[m])
+    dfile.close()
+
     exit(1)
 
 
 if __name__ == "__main__":
+    # compute_density_modes_from_profiles()
 
-    do_histogram_processing_of_iterations()
+    # plot_max_of_corr_phi_r_density_mode_phase_for_all_it()
+    # plot_phi0_slice_Jflux_with_time()
 
 
-
+    # do_histogram_processing_of_iterations()
+    do_produce_interpolated_data_for_iterations()
+    # do_compute_save_all_modes_for_all_it()
+    # plot_corr_ang_mom_flux_dens_unb_bern_movie()
+    # plot_ang_mom_flux_dens_unb_bern_movie()
 
     # times, files = get_profiles("DD2_M13641364_M0_LR_R04",
     #                             time_list=[], it_list=[], n_more=0, ftype='.h5', time_units='s', add_path='profiles/3d/')
@@ -1927,8 +3304,10 @@ if __name__ == "__main__":
 
     # o_mask = MASK_STORE("/data1/numrel/WhiskyTHC/Backup/2018/GW170817/SLy4_M13641364_M0_SR/profiles/434176.h5")
     # print(o_mask.get_masked_data(2, "rho"))
+    # plot_density_modes()
+
     ''' MAIN '''
-    sim = "DD2_M13641364_M0_LK_SR_R04"
+    sim = "DD2_M13641364_M0_SR"
     it = 1111116
 
     # sim = "DD2_M13641364_M0_LK_SR_R04"; times: 0.084 0.073 0.062 0.051
@@ -1942,21 +3321,21 @@ if __name__ == "__main__":
     # LS220:LS220_M13641364_M0_SR/profiles/3d/1081344.h5
     #
 
-    o_methods = MAINMETHODS_STORE("/data1/numrel/WhiskyTHC/Backup/2018/GW170817/"
-                                  "{}/profiles/3d/{}.h5".format(sim, it), sim)
+    # o_methods = MAINMETHODS_STORE("/data1/numrel/WhiskyTHC/Backup/2018/GW170817/"
+    #                               "{}/profiles/3d/{}.h5".format(sim, it), sim)
     #
-    o_methods.get_total_mass(save=True)
-    print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_ye, save=True)))
-    print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_temp_ye, save=True)))
-    print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_r, save=True)))
-    print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_theta, save=True)))
-    print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_ang_mom, save=True)))
-    print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_ang_mom_flux, save=True)))
-    print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_dens_unb_bern, save=True)))
-    print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_ang_mom_flux_theta, save=True)))
-    print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_ang_mom_flux_dens_unb_bern, save=True)))
-    print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_inv_ang_mom_flux_dens_unb_bern, save=True)))
-    exit(1)
+    # o_methods.get_total_mass(save=True)
+    # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_ye, save=True)))
+    # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_temp_ye, save=True)))
+    # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_r, save=True)))
+    # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_theta, save=True)))
+    # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_ang_mom, save=True)))
+    # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_ang_mom_flux, save=True)))
+    # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_rho_dens_unb_bern, save=True)))
+    # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_ang_mom_flux_theta, save=True)))
+    # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_ang_mom_flux_dens_unb_bern, save=True)))
+    # print(np.sum(o_methods.get_correlation(o_methods.corr_task_dic_inv_ang_mom_flux_dens_unb_bern, save=True)))
+    # exit(1)
     ''' PLOTTING '''
     # o_plot = PLOT_MANY_TASKS(sim)
     # o_plot.main()
@@ -1975,17 +3354,28 @@ if __name__ == "__main__":
     #                          "DD2_M13641364_M0_LK_SR_R04",
     #                          CYLINDRICAL_GRID(task_for_int["grid"]))
     # int_.save_new_grid()
+    # int_.save_int_v_n("density")
     # int_.save_int_v_n("ang_mom_flux")
     # int_.save_int_v_n("dens_unb_bern")
 
     # load interpolated data for plotting and processing
-    load_int = LOAD_INT_DATA("DD2_M13641364_M0_LK_SR_R04")
-    print(load_int.get_grid_data(1818738, "r_cyl"))
+    # load_int = LOAD_INT_DATA("DD2_M13641364_M0_LK_SR_R04")
+    # print(load_int.get_grid_data(1818738, "r_cyl"))
 
+    # o_plot = PLOT_TASK(sim)
+    # o_plot.plot_summed_correlation_with_time()
 
+    # o_dm = LOAD_DENSITY_MODES(sim)
+    # print(o_dm.get_data(1, 'int_phi_r'))
+    # print(o_dm.get_data(1, 'int_phi'))
+    # print(o_dm.get_grid('r_cyl'))
 
 
     ''''''
+
+
+
+
 
     # for rl in range(o_methods.nlevels):
     #     data = o_methods.get_masked_data(rl, "dens_unb_bern")

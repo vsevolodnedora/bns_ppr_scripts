@@ -306,6 +306,10 @@ class SIM_EJ_HIST:
     def load_total_flux(self, fname):
         try:
             time, flux, mass = np.loadtxt(fname, usecols=[0, 1, 2], unpack=True)
+            if isinstance(time, float):
+                time = np.array([time])
+                flux = np.array([flux])
+                mass = np.array([mass])
             time *= time_constant / 1000 #[s]
         except IOError:
             Printcolor.yellow("Warning: total flux was not loaded \n"
@@ -510,7 +514,7 @@ class SIM_CORR:
 
         if norm:
             mass = mass / np.sum(mass)
-            mass = 2 * np.maximum(mass, 1e-15) # WHAT'S THAT?
+            mass = np.maximum(mass, 1e-15) # WHAT'S THAT?
 
         return var1, var2, mass
 
@@ -872,7 +876,6 @@ class PLOT_HISTS:
 
         ax.set_xlabel(r"$\upsilon_{\infty}$ [c]")
 
-
     def plot_for_hists(self, tasks=[]):
 
         # basic_size = [4, 2]
@@ -902,7 +905,7 @@ class PLOT_HISTS:
                           fontsize=8)
                 ax.set_ylabel(r"$M/M_{\mathrm{ej}}$")
 
-        plt.subplots_adjust(hspace=0.0)
+        # plt.subplots_adjust(hspace=0.0)
         # plt.subplots_adjust(wspace=0.0)
 
         for a in f.axes:
@@ -1890,7 +1893,29 @@ def plot_LS220_M13641364_M0_resolution_comparison_hists():
 
     hists.plot_for_hists(['theta', 'vel_inf', 'ye'])
 
+
+''''''
+
+def for_all_of_ass():
+    sims = os.listdir(Paths.ppr_sims)
+    for sim in sims:
+        Printcolor.blue("Processing: {}".format(sim))
+        profs = PLOT_PROFS(sim)
+        profs.plot_vn1_for_sim('flux')
+
+        hists = PLOT_HISTS(sim)
+        hists.plot_for_hists(['theta', 'vel_inf', 'ye'])
+
+        corrs = PLOT_CORRS(sim)
+        corrs.plot_vn1_vn2_for_sim('theta', 'vel_inf')
+        corrs.plot_vn1_vn2_for_sim('theta', 'ye')
+
+        fluxs = PLOT_EJECTA(sim)
+        fluxs.plot_from_task_dics()
+
 if __name__ == '__main__':
+
+    for_all_of_ass(); exit(1)
 
     # plot_DD2_M13641364_M0_LK_resolution_comparison_hists(); exit(1)
     # plot_DD2_M13641364_M0_LK_resolution_comparison_ejecta(); exit(1)
@@ -1905,11 +1930,11 @@ if __name__ == '__main__':
 
     # TODO For Average you are using only NOT normalized. SO you have to set a choce to get a normalized separately
 
-    sim = "SFHo_M14521283_M0_LR"
+    sim = "DD2"
 
-    SIM_UNBOUND(sim)
-    SIM_DISK(sim)
-    SIM_EJ_HIST(sim)
+    # SIM_UNBOUND(sim)
+    # SIM_DISK(sim)
+    # SIM_EJ_HIST(sim)
     profs = PLOT_PROFS(sim);  profs.plot_vn1_for_sim('flux')
     hists = PLOT_HISTS(sim);  hists.plot_for_hists(['theta', 'vel_inf', 'ye'])
     corrs = PLOT_CORRS(sim);  corrs.plot_vn1_vn2_for_sim('theta', 'vel_inf')

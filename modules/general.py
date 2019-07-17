@@ -22,37 +22,37 @@ class Printcolor:
         pass
 
     @staticmethod
-    def red(text, comma=','):
-        if comma == ',':
+    def red(text, comma=False):
+        if comma:
             print(Printcolor.FAIL + text + Printcolor.ENDC),
         else:
             print(Printcolor.FAIL + text + Printcolor.ENDC)
 
     @staticmethod
-    def yellow(text, comma=','):
-        if comma == ',':
+    def yellow(text, comma=False):
+        if comma:
             print(Printcolor.WARNING + text + Printcolor.ENDC),
         else:
             print(Printcolor.WARNING + text + Printcolor.ENDC)
 
     @staticmethod
-    def blue(text, comma=','):
-        if comma == ',':
+    def blue(text, comma=False):
+        if comma:
             print(Printcolor.OKBLUE + text + Printcolor.ENDC),
         else:
             print(Printcolor.OKBLUE + text + Printcolor.ENDC)
 
     @staticmethod
-    def green(text, comma=','):
-        if comma == ',':
+    def green(text, comma=False):
+        if comma:
             print(Printcolor.OKGREEN + text + Printcolor.ENDC),
         else:
             print(Printcolor.OKGREEN + text + Printcolor.ENDC)
             
 
     @staticmethod
-    def bold(text, comma=','):
-        if comma == ',':
+    def bold(text, comma=False):
+        if comma:
             print(Printcolor.BOLD + text + Printcolor.ENDC),
         else:
             print(Printcolor.BOLD + text + Printcolor.ENDC)
@@ -316,64 +316,75 @@ def set_it_output_map(path_to_sim, file_for_it="dens.norm1.asc", clean=True):
     """
 
     gen_set = {"indir": path_to_sim,
+               "reserv_indir": Paths.ppr_sims+path_to_sim.split('/')[-2]+'/collated/',
                "file_for_it": file_for_it}
 
     output_it_map = {}
 
-    fpath = gen_set["indir"] + "output-*" + "/data/" + gen_set['file_for_it']
-    files = glob(fpath)
-
-    if not clean:
-        print('-' * 25 + 'LOADING it list ({})'
-              .format(gen_set['file_for_it']) + '-' * 25)
-        print("\t loading from: {}".format(gen_set['indir']))
-
-    if len(files) == 0:
-        raise ValueError("No files found for it_time mapping searched:\n{}"
-                         .format(fpath))
-    if not clean:
-        print("\t   files found: {}".format(len(files)))
-
-
-
-    it_time = np.zeros(2)
-    for file in files:
-        o_name = file.split('/')
-        o_dir = ''
-        for o_part in o_name:
-            if o_part.__contains__('output-'):
-                o_dir = o_part
-        if o_dir == '':
-            raise NameError("Did not find output-xxxx in {}".format(o_name))
-        it_time_i = np.loadtxt(file, usecols=(0, 1))
-        output_it_map[o_dir] = it_time_i
-        it_time = np.vstack((it_time, it_time_i))
-    it_time = np.delete(it_time, 0, 0)
-    if not clean:
-        print('outputs:{} iterations:{} [{}->{}]'.format(len(files),
-                                                         len(it_time[:, 0]),
-                                                         int(it_time[:, 0].min()),
-                                                         int(it_time[:, 0].max())))
-    if len(it_time[:, 0]) != len(set(it_time[:, 0])):
+    if os.path.isdir(gen_set["indir"]):
+        fpath = gen_set["indir"] + "output-*" + "/data/" + gen_set['file_for_it']
+        files = glob(fpath)
         if not clean:
-            Printcolor.yellow("Warning: repetitions found in the "
-                              "loaded iterations")
+            print('-' * 25 + 'LOADING it list ({})'
+                  .format(gen_set['file_for_it']) + '-' * 25)
+            print("\t loading from: {}".format(gen_set['indir']))
+        if len(files) == 0:
+            raise ValueError("No files found for it_time mapping searched:\n{}"
+                             .format(fpath))
+        if not clean:
+            print("\t   files found: {}".format(len(files)))
+
+        it_time = np.zeros(2)
+        for file in files:
+            o_name = file.split('/')
+            o_dir = ''
+            for o_part in o_name:
+                if o_part.__contains__('output-'):
+                    o_dir = o_part
+            if o_dir == '':
+                raise NameError("Did not find output-xxxx in {}".format(o_name))
+            it_time_i = np.loadtxt(file, usecols=(0, 1))
+            output_it_map[o_dir] = it_time_i
+            it_time = np.vstack((it_time, it_time_i))
+        it_time = np.delete(it_time, 0, 0)
+        if not clean:
+            print('outputs:{} iterations:{} [{}->{}]'.format(len(files),
+                                                             len(it_time[:, 0]),
+                                                             int(it_time[:, 0].min()),
+                                                             int(it_time[:, 0].max())))
+        if len(it_time[:, 0]) != len(set(it_time[:, 0])):
+            if not clean:
+                Printcolor.yellow("Warning: repetitions found in the "
+                                  "loaded iterations")
+            iterations = np.unique(it_time[:, 0])
+            timestpes = np.unique(it_time[:, 1])
+            if not len(iterations) == len(timestpes):
+                raise ValueError("Failed attmept to remove repetitions from "
+                                 "\t it and time lists. Wrong lengths: {} {}"
+                                 .format(len(iterations), len(timestpes)))
+        else:
+            if not clean:
+                Printcolor.blue("No repetitions found in loaded it list")
+            iterations = np.unique(it_time[:, 0])
+            timestpes = np.unique(it_time[:, 1])
+        if not clean:
+            print('-' * 30 + '------DONE-----' + '-' * 30)
+
+        return output_it_map, np.vstack((iterations, timestpes)).T
+    elif os.path.isdir(gen_set["reserv_indir"]):
+        fpath = gen_set["reserv_indir"] + gen_set["file_for_it"]
+        if not os.path.isfile(fpath):
+            raise IOError("file: {} not found".format(fpath))
+        it_time = np.loadtxt(fpath, usecols=(0, 1))
         iterations = np.unique(it_time[:, 0])
         timestpes = np.unique(it_time[:, 1])
-        if not len(iterations) == len(timestpes):
-            raise ValueError("Failed attmept to remove repetitions from "
-                             "\t it and time lists. Wrong lengths: {} {}"
-                             .format(len(iterations), len(timestpes)))
+
+        return {}, np.vstack((iterations, timestpes)).T
+
     else:
-        if not clean:
-            Printcolor.blue("No repetitions found in loaded it list")
-        iterations = np.unique(it_time[:, 0])
-        timestpes = np.unique(it_time[:, 1])
+        raise IOError("Neither output-xxxx/file nor /collated/file found.")
 
-    if not clean:
-        print('-' * 30 + '------DONE-----' + '-' * 30)
 
-    return output_it_map, np.vstack((iterations, timestpes)).T
 
 def interpoate_time_form_it(it_list, path_to_sim, time_units='s', extrapolate=True):
     '''

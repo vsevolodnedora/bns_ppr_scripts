@@ -25,6 +25,7 @@ import copy
 import h5py
 import csv
 import os
+from glob import glob
 
 from scidata.utils import locate
 import scidata.carpet.hdf5 as h5
@@ -132,6 +133,7 @@ class COMPUTE_LIGHTCURVE():
                        }
 
         self.source_name = 'AT2017gfo'
+        # self.source_name = 'AT2017gfo view_angle=180/12.' # change the source properties
 
         self.glob_vars = {'m_disk':     self.table.get_value(self.sim, "Mdisk3D"), # 0.070, # LS220 | 0.20 - DD2
                          'eps0':        1.5e19,
@@ -203,7 +205,7 @@ class COMPUTE_LIGHTCURVE():
             self.ejecta_params['psdynamics'] = {'mass_dist': 'sin2', 'vel_dist': 'uniform', 'op_dist': 'uniform',
                                               'therm_model': 'BKWM', 'eps_ye_dep': True, 'v_law': 'power'}
             self.ejecta_vars['psdynamics'] = {'xi_disk':           None,
-                                           'm_ej':              self.table.get_value(self.sim, "Mej_bern"), #0.00364718, # - LS220 | 0.010218 - DD2
+                                           'm_ej':              self.table.get_value(self.sim, "Mej_bern"), # WARNING! If set and NR it will overwrite
                                            'step_angle_mass':   None,
                                            'high_lat_flag':     None,
                                            'central_vel':       0.27,
@@ -213,7 +215,13 @@ class COMPUTE_LIGHTCURVE():
                                            'central_op':        1.,
                                            'high_lat_op':       None,
                                            'low_lat_op':        None,
-                                           'step_angle_op': math.radians(45.)}
+                                           'step_angle_op':     math.radians(45.),
+
+                                           'override_m_ej':     False, # for manual import
+                                           'kappa_low':         1.,    # for Import_NR data
+                                           'kappa_high':        30.
+
+                                        }
         elif iso_or_aniso == "":
             pass
         else:
@@ -370,6 +378,8 @@ class COMPUTE_LIGHTCURVE():
         # go into the fold with all classes of mkn
         os.chdir(Paths.mkn)
         # from mkn import MKN
+
+        print(self.ejecta_vars['psdynamics']['m_ej'])
         model = MKN(self.glob_params, self.glob_vars, self.ejecta_params, self.ejecta_vars, self.source_name)
 
         print('I am computing the light curves')
@@ -657,9 +667,25 @@ class LOAD_LIGHTCURVE():
 
         self.filter_fpath = Paths.mkn + Files.filt_at2017gfo
 
-        self.list_model_fnames = ["mkn_model.h5", "mkn_model1.h5", "mkn_model2.h5", "mkn_model3.h5", "mkn_model4.h5"]
+        # self.list_model_fnames = ["mkn_model.h5", "mkn_model1.h5", "mkn_model2.h5", "mkn_model3.h5", "mkn_model4.h5",
+        #                           'mkn_model2_t50.h5', 'mkn_model2_t100.h5', 'mkn_model2_t150.h5', 'mkn_model2_t200.h5']
+
+        fpaths = glob(Paths.ppr_sims + sim + "/res_mkn/mkn_model*")
+        flist = []
+        if len(fpaths) == 0: raise IOError("No mkn files found {}"
+                                           .format(Paths.ppr_sims + sim + "/res_mkn/mkn_model*"))
+        for file_ in fpaths:
+            flist.append(file_.split('/')[-1])
+        self.list_model_fnames = flist
+
+
         self.list_obs_filt_fnames = ["AT2017gfo.h5"]
         self.list_fnames = self.list_model_fnames + self.list_obs_filt_fnames
+
+        self.list_attrs = ["psdynamics", "dynamics", "wind", "secular"]
+        self.attrs_matrix = [[{}
+                              for z in range(len(self.list_attrs))]
+                              for y in range(len(self.list_fnames))]
 
         self.data_matrix = [{}
                              for y in range(len(self.list_fnames))]
@@ -670,6 +696,25 @@ class LOAD_LIGHTCURVE():
         if not fname in self.list_fnames:
             raise NameError("fname: {} not in list_fnames:\n{}"
                             .format(fname, self.list_fnames))
+
+    def check_attr(self, attr):
+        if not attr in self.list_attrs:
+            raise NameError("attr:{} not in list of attrs:{}"
+                            .format(attr, self.list_attrs))
+
+    def i_attr(self, attr):
+        return int(self.list_attrs.index(attr))
+
+    def get_attr(self, attr, fname=''):
+
+        self.check_fname(fname)
+        self.check_attr(attr)
+        self.is_mkn_file_loaded(fname)
+
+        return self.attrs_matrix[self.i_fname(fname)][self.i_attr(attr)]
+
+
+
 
     def i_fname(self, fname=''):
         return int(self.list_fnames.index(fname))
@@ -684,8 +729,14 @@ class LOAD_LIGHTCURVE():
         model = h5py.File(model_fpath, "r")
         filters_model = []
         for it in model:
-            filters_model.append(it)
-            dict_model[str(it)] = np.array(model[it])
+            if it in self.list_attrs:
+                dic = {}
+                for v_n in model[it].attrs:
+                    dic[v_n] = model[it].attrs[v_n]
+                self.attrs_matrix[self.i_fname(fname)][self.i_attr(it)] = dic
+            else:
+                filters_model.append(it)
+                dict_model[str(it)] = np.array(model[it])
 
         # print('\t Following filters are available in mkn_model.h5: \n\t  {}'.format(filters_model))
 
@@ -735,6 +786,11 @@ class EXTRACT_LIGHTCURVE(LOAD_LIGHTCURVE):
     def __init__(self, sim):
         LOAD_LIGHTCURVE.__init__(self, sim)
         self.list_bands = ["g", "z", "Ks"]
+        self.do_extract_parameters = True
+
+        self.model_params = [[{"psdynamics":{}, "dynamics":{}, "wind":{}, "secular":{}}
+                                  for y in range(len(self.list_bands))]
+                                 for z in range(len(self.list_fnames))]
 
         self.model_mag_matrix = [[ []
                                      for y in range(len(self.list_bands))]
@@ -752,8 +808,6 @@ class EXTRACT_LIGHTCURVE(LOAD_LIGHTCURVE):
 
     def i_band(self, band):
         return int(self.list_bands.index(band))
-
-
 
     def extract_lightcurve(self, band, fname=''):
 
@@ -777,6 +831,10 @@ class EXTRACT_LIGHTCURVE(LOAD_LIGHTCURVE):
                                 .format(band, dict_model.keys()))
 
         self.model_mag_matrix[self.i_fname(fname)][self.i_band(band)] = res
+
+        # ''' extract parameters '''
+        # if self.do_extract_parameters:
+        #     if "psdynamics" in
 
 
     def extract_obs_data(self, band, fname):
@@ -809,10 +867,17 @@ class EXTRACT_LIGHTCURVE(LOAD_LIGHTCURVE):
 
 
     def get_obs_data(self, band, fname="AT2017gfo.h5"):
+        """
+
+        :param band:
+        :param fname:
+        :return:     list of [:times:, :magnitudes:, :errors:] 3D array for every subband in band
+        """
         self.check_fname(fname)
         self.check_band(band)
 
         self.is_extracted(band, fname)
+
 
         return self.obs_mag_matrix[self.i_fname(fname)][self.i_band(band)]
 
@@ -870,12 +935,357 @@ class EXTRACT_LIGHTCURVE(LOAD_LIGHTCURVE):
         #
         # return time_, mins, maxs
 
+    def get_model_median(self, band, fname="mkn_model.h5"):
+
+        m_times, m_maxs, m_mins = self.get_model_min_max(band, fname)
+
+        m_times = np.array(m_times)
+        m_maxs = np.array(m_maxs)
+        m_mins = np.array(m_mins)
+
+        return m_times, m_mins + ((m_maxs - m_mins) / 2)
+
+    def get_mismatch(self, band, fname="mkn_model.h5"):
+
+        from scipy import interpolate
+
+        m_times, m_maxs, m_mins = self.get_model_min_max(band, fname)
+        obs_data = self.get_obs_data(band)
+
+
+        all_obs_times = []
+        all_obs_maxs = []
+        all_obs_mins = []
+        for sumbband in obs_data:
+
+            obs_time = sumbband[:, 0]
+            obs_maxs = sumbband[:, 1] + sumbband[:, 2] # data + error bar
+            obs_mins = sumbband[:, 1] - sumbband[:, 2]  # data - error bar
+
+            all_obs_times = np.append(all_obs_times, obs_time)
+            all_obs_maxs = np.append(all_obs_maxs, obs_maxs)
+            all_obs_mins = np.append(all_obs_mins, obs_mins)
+
+        all_obs_times, all_obs_maxs, all_obs_mins = \
+            x_y_z_sort(all_obs_times, all_obs_maxs, all_obs_mins)
+
+        # interpolate for observationa times
+
+        int_m_times = all_obs_times
+        if all_obs_times.max() > m_times.max():
+            int_m_times = all_obs_times[all_obs_times < m_times.max()]
+        int_m_maxs = interpolate.interp1d(m_times, m_maxs, kind='linear')(int_m_times)
+        int_m_mins = interpolate.interp1d(m_times, m_mins, kind='linear')(int_m_times)
+
+        min_mismatch = []
+        max_mismatch = []
+
+        for i in range(len(int_m_times)):
+            m_max = int_m_maxs[i]
+            m_min = int_m_mins[i]
+            o_min = all_obs_mins[i]
+            o_max = all_obs_maxs[i]
+
+            if o_max > m_max and o_min < m_min:
+                min_mismatch = np.append(min_mismatch, 0)
+            elif o_min <= m_max and o_min >= m_min:
+                min_mismatch = np.append(min_mismatch, 0)
+            elif o_max <= m_max and o_max >= m_min:
+                min_mismatch = np.append(min_mismatch, 0)
+            elif (o_min > m_max):
+                min_mismatch = np.append(min_mismatch, o_min - m_max)
+            elif (o_max < m_min):
+                min_mismatch = np.append(min_mismatch, o_max - m_min)
+            else:
+                raise ValueError("mismatched failed m_max:{} m_min:{} o_max:{} o_min:{}"
+                                 .format(m_max, m_min, o_max, o_min))
+            #
+            #
+            # min_mismatch = np.append(min_mismatch, min([o_min - m_min, o_min - m_max,
+            #                                             m_max - m_min, o_max - m_max]))
+            # max_mismatch = np.append(max_mismatch, max([o_min - m_min, o_min - m_max,
+            #                                             m_max - m_min, o_max - m_max]))
+
+        # print(min_mismatch)
+
+        return int_m_times, min_mismatch, max_mismatch
+
+
+        # print(obs_data)
+
+    def get_model_peak(self, band, fname="mkn_model.h5"):
+        t, mag = self.get_model_median(band, fname)
+        idx = find_nearest_index(mag, mag.min())
+        return t[idx], mag[idx]
+
+    def get_obs_peak(self, band, fname = "AT2017gfo.h5"):
+
+        from scipy import interpolate
+
+        obs_data = self.get_obs_data(band, fname)
+        obs_times = []
+        obs_mags = []
+
+        for sumbband in obs_data:
+            obs_times = np.append(obs_times, sumbband[:, 0])
+            obs_mags = np.append(obs_mags, sumbband[:, 1])
+
+        obs_times, obs_mags = x_y_z_sort(obs_times, obs_mags)
+
+        int_obs_times = np.mgrid[obs_times[0]:obs_times[-2]:100j]
+
+        assert len(int_obs_times) == 100
+
+        assert obs_times.min() <= int_obs_times.min()
+        assert obs_times.max() >= int_obs_times.max()
+
+        int_obs_mags = interpolate.interp1d(obs_times, obs_mags, kind='linear')(int_obs_times)
+        print(int_obs_mags)
+        idx = find_nearest_index(int_obs_mags, int_obs_mags.min())
+        return int_obs_times[idx], int_obs_mags[idx]
+
+
+        # obs_data = self.get_obs_data(band)
+
+        # all_obs_times = []
+        # all_obs_maxs = []
+        # all_obs_mins = []
+        # for sumbband in obs_data:
+        #     obs_time = sumbband[:, 0]
+        #     obs_maxs = sumbband[:, 1] + sumbband[:, 2]  # data + error bar
+        #     obs_mins = sumbband[:, 1] - sumbband[:, 2]  # data - error bar
+        #
+        #     all_obs_times = np.append(all_obs_times, obs_time)
+        #     all_obs_maxs = np.append(all_obs_maxs, obs_maxs)
+        #     all_obs_mins = np.append(all_obs_mins, obs_mins)
+        #
+        # all_obs_times, all_obs_maxs, all_obs_mins = \
+        #     x_y_z_sort(all_obs_times, all_obs_maxs, all_obs_mins)
+        #
+        #
+        # #
+        # # print(m_times)
+        # # print(all_obs_times)
+        # #
+        # # mask1 = (m_times < all_obs_times.max())
+        # # mask2 = (m_times > all_obs_times.min())
+        # # print(mask1)
+        # # print(mask2)
+        # # int_obs_times = m_times[mask1 & mask2]
+        # int_obs_times = np.mgrid[all_obs_times.min():all_obs_times.max():100j]
+        # print(np.log10(all_obs_times))
+        # int_obs_maxs = interpolate.interp1d(all_obs_times, all_obs_maxs, kind='linear')(int_obs_times)
+        # int_obs_mins = interpolate.interp1d(all_obs_times, all_obs_mins, kind='linear')(int_obs_times)
+        #
+        # idx = find_nearest_index(int_obs_maxs, int_obs_maxs.min())
+        #
+        # return int_obs_times[idx], int_obs_maxs[idx], int_obs_mins[idx]
+
+        #
+        #
+        #
+        #
+        # # interpolate for observationa times
+        #
+        # int_m_times = all_obs_times
+        # if all_obs_times.max() > m_times.max():
+        #     int_m_times = all_obs_times[all_obs_times < m_times.max()]
+        # int_m_maxs = interpolate.interp1d(all_obs_times, all_obs_maxs, kind='cubic')(int_m_times)
+        # int_m_mins = interpolate.interp1d(all_obs_times, all_obs_mins, kind='cubic')(int_m_times)
+        #
+        # min_mismatch = []
+        # max_mismatch = []
+        #
+        # for i in range(len(int_m_times)):
+        #     m_max = int_m_maxs[i]
+        #     m_min = int_m_mins[i]
+        #     o_min = all_obs_mins[i]
+        #     o_max = all_obs_maxs[i]
+        #
+        #     if o_max > m_max and o_min < m_min:
+        #         min_mismatch = np.append(min_mismatch, 0)
+        #     elif o_min <= m_max and o_min >= m_min:
+        #         min_mismatch = np.append(min_mismatch, 0)
+        #     elif o_max <= m_max and o_max >= m_min:
+        #         min_mismatch = np.append(min_mismatch, 0)
+        #     elif (o_min > m_max):
+        #         min_mismatch = np.append(min_mismatch, o_min - m_max)
+        #     elif (o_max < m_min):
+        #         min_mismatch = np.append(min_mismatch, o_max - m_min)
+        #     else:
+        #         raise ValueError("mismatched failed m_max:{} m_min:{} o_max:{} o_min:{}"
+        #                          .format(m_max, m_min, o_max, o_min))
+        #     #
+        #     #
+        #     # min_mismatch = np.append(min_mismatch, min([o_min - m_min, o_min - m_max,
+        #     #                                             m_max - m_min, o_max - m_max]))
+        #     # max_mismatch = np.append(max_mismatch, max([o_min - m_min, o_min - m_max,
+        #     #                                             m_max - m_min, o_max - m_max]))
+        #
+        # # print(min_mismatch)
+        #
+        # return int_m_times, min_mismatch, max_mismatch
+
+    def get_obs_peak_duration(self, band, limit=1.,  fname = "AT2017gfo.h5"):
+
+        from scipy import interpolate
+
+        obs_data = self.get_obs_data(band,  fname)
+        obs_times = []
+        obs_mags = []
+
+        for sumbband in obs_data:
+            obs_times = np.append(obs_times, sumbband[:, 0])
+            obs_mags = np.append(obs_mags, sumbband[:, 1])
+
+        obs_times, obs_mags = x_y_z_sort(obs_times, obs_mags)
+
+        int_obs_times = np.mgrid[obs_times[0]:obs_times[-2]:100j]
+
+        assert len(int_obs_times) == 100
+
+        assert obs_times.min() <= int_obs_times.min()
+        assert obs_times.max() >= int_obs_times.max()
+
+        int_obs_mags = interpolate.interp1d(obs_times, obs_mags, kind='linear')(int_obs_times)
+        print(int_obs_mags)
+        idx = find_nearest_index(int_obs_mags, int_obs_mags.min())
+
+        peaktime = int_obs_times[idx]
+        peakmag = int_obs_mags[idx]
+
+        mask = (obs_times >= peaktime) & (obs_mags < peakmag + limit)
+        assert len(mask) > 1
+        post_peak_times = obs_times[mask]
+        post_peak_mags = obs_mags[mask]
+
+        assert len(post_peak_times) > 1
+
+
+        return post_peak_times[-1] - peaktime, post_peak_mags[-1]
+
+    def get_model_peak_duration(self, band, fname="mkn_model.h5", limit = 1.):
+
+        t, mag = self.get_model_median(band, fname)
+        idx = find_nearest_index(mag, mag.min())
+        tpeak = t[idx]
+        magpeak = mag[idx]
+
+        mask = (t >= tpeak) & (mag < magpeak + limit)
+        assert len(mask) > 1
+        post_peak_times = t[mask]
+        post_peak_mags = mag[mask]
+
+        assert len(post_peak_times) > 1
+
+        return post_peak_times[-1] - tpeak, post_peak_mags[-1]
+
+class COMBINE_LIGHTCURVES(EXTRACT_LIGHTCURVE):
+
+    def __init__(self, sim):
+
+        EXTRACT_LIGHTCURVE.__init__(self, sim)
+
+
+    def get_model_peaks(self, band, files_name_gen=r"mkn_model2_m*.h5"):
+
+        files = glob(Paths.ppr_sims+self.sim+'/res_mkn/'+files_name_gen)
+        # print(files)
+
+        tpeaks = []
+        mpeaks = []
+        attrs = []
+
+        for file_ in files:
+            tpeak, mpeak = self.get_model_peak(band, file_.split('/')[-1])
+            attr = self.get_attr("psdynamics", file_.split('/')[-1])["m_ej"]
+
+            tpeaks = np.append(tpeaks, tpeak)
+            mpeaks = np.append(mpeaks, mpeak)
+            attrs = np.append(attrs, attr)
+
+        attrs, tpeaks, mpeaks = x_y_z_sort(attrs, tpeaks, mpeaks)
+
+        return attrs, tpeaks, mpeaks
+
+    def get_model_peak_durations(self, band, files_name_gen=r"mkn_model2_m*.h5"):
+
+        files = glob(Paths.ppr_sims + self.sim + '/res_mkn/' + files_name_gen)
+        # print(files)
+
+        tdurs = []
+        attrs = []
+
+        for file_ in files:
+            tdur, _ = self.get_model_peak_duration(band, file_.split('/')[-1], limit=1.)
+            attr = self.get_attr("psdynamics", file_.split('/')[-1])["m_ej"]
+
+            tdurs = np.append(tdurs, tdur)
+            attrs = np.append(attrs, attr)
+
+        attrs, tdurs = x_y_z_sort(attrs, tdurs)
+
+        return attrs, tdurs
+
+    def get_table(self, band='g', files_name_gen=r"mkn_model2_m*.h5"):
+
+        files = glob(Paths.ppr_sims+self.sim+'/res_mkn/'+files_name_gen)
+        # print(files)
+
+        t_arr = []
+        mag_arr = []
+        attr_arr = []
+
+
+        def get_atr(file_):
+            return self.get_attr("psdynamics", file_.split('/')[-1])["m_ej"]
+
+        files = sorted(files, key=get_atr)
+
+
+        for file_ in files:
+
+            m_time, m_mag = self.get_model_median(band, file_.split('/')[-1])
+            attr = self.get_attr("psdynamics", file_.split('/')[-1])["m_ej"]
+
+            print('\t processing {} atr: {}'.format(file_.split('/')[-1], attr))
+
+            t_arr = m_time
+            mag_arr = np.append(mag_arr, m_mag)
+            attr_arr.append(attr)
+
+        mag_table = np.reshape(mag_arr, (len(attr_arr), len(t_arr)))
+
+        t_grid, attr_grid = np.meshgrid(t_arr, attr_arr)
+
+        return  t_grid, attr_grid, mag_table
+
+        #
+        # dfile = h5py.File(files[0], "r")
+        #
+        #
+        #
+        #
+        #
+        # ejecta_type = "psdynamics"
+        # print(dfile[ejecta_type])
+        #
+        # # dfile[ejecta_type].attrs[""]
+        #
+        # v_ns = []
+        # values = []
+        # for v_n in dfile[ejecta_type].attrs:
+        #     v_ns.append(v_n)
+        #     values.append(dfile[ejecta_type].attrs[v_n])
+        #
+        # print(v_ns, values)
+        #
+        # pass
+
+
 
 
 ''' ---------------------------------------------- '''
-
-
-
 
 
 class LOAD_LIGHTCURVES():
@@ -968,10 +1378,6 @@ class LOAD_LIGHTCURVES():
     def get_filters(self):
         self.is_filters_loaded()
         return self.filters
-
-
-
-
 
 class PLOT_LIGHTCURVE():
 
@@ -3219,13 +3625,357 @@ def plot_many_lightcuves():
     exit(1)
 
 
-def compute_for_3_simulations_fully_informed():
+def compute_for_1_simulations_fully_informed_2_comp_varying_total_bern_mass():
+
+    from d1analysis import ADD_METHODS_1D
+
+    # times_to_extract_total_mass
+    ti = [.020, 0.1, 0.15, 0.20]
+    ti = np.arange(0.015, stop=0.250, step=0.01)
+    print(ti)#; exit(1)
+    sim = "DD2_M13641364_M0_LK_SR_R04"
+    o_data = ADD_METHODS_1D(sim)
+
+    for t in ti:
+
+        # times, masses = o_data.get_extrapolated_arr(v_n_x='t_tot_flux', v_n_y='mass_tot_flux',
+        #                                             criterion='_0_b_w',
+        #                                             x_left= None, x_right= 180, # percent
+        #                                             x_start= 0.040, x_stop= None,
+        #                                             depth= 1000, method= 1)
+
+        times, masses = o_data.get_int_extra_arr(v_n_x='t_tot_flux', v_n_y='mass_tot_flux',
+                                                 criterion='_0_b_w',
+                                                 x_left= None, x_right= 180,  # percent
+                                                 x_extr_start= 0.040, x_extr_stop= None,
+                                                 depth= 1000, method= 1)
+
+        m = masses[find_nearest_index(times, t)]
+        print("\tt:{} m:{}".format(t, m))
+
+        make_model = COMPUTE_LIGHTCURVE(sim)
+        make_model.output_fname = 'mkn_model2_m{}.h5'.format(int(m*1000)) # time in ms for a file
+        make_model.set_dyn_iso_aniso = "aniso"
+        make_model.set_psdyn_iso_aniso = "aniso"
+        make_model.set_wind_iso_aniso = ""
+        make_model.set_secular_iso_aniso = ""
+        make_model.set_par_war()
+        make_model.ejecta_vars['psdynamics']['override_m_ej'] = True
+        make_model.ejecta_vars['psdynamics']['m_ej'] =  m
+
+        # print(make_model.ejecta_vars['psdynamics']); exit(0)
+
+        make_model.compute_save_lightcurve(write_output=True)
+
+    exit(1)
+
+def compute_for_1_simulations_fully_informed_2_comp_varying_total_bern_mass_psdyn_opacity():
+
+    import seaborn as sns
+    # flights = sns.load_dataset("flights")
+    # print(type(flights))
+    # exit(1)
+
+
+    from d1analysis import ADD_METHODS_1D
+
+    # times_to_extract_total_mass
+
+    kappas = [0.5, 1., 1.5, 2., 2.5, 3.]
+    # kappas = [5, 10, 15, 20, 25, 30]
+    ti = [.05, 0.1, 0.15, 0.20]
+
+    sim = "DD2_M13641364_M0_LK_SR_R04"
+    o_data = ADD_METHODS_1D(sim)
+
+    log_l = [[0 for k in range(len(kappas))] for t in range(len(ti))]
+    for it, t in enumerate(ti):
+
+        times, masses = o_data.get_extrapolated_arr(v_n_x='t_tot_flux', v_n_y='mass_tot_flux',
+                                                    criterion='_0_b_w',
+                                                    x_left= None, x_right= 150, # percent
+                                                    x_start= 0.040, x_stop= None,
+                                                    depth= 1000, method= 1)
+        m = masses[find_nearest_index(times, t)]
+
+        for ik, k in enumerate(kappas):
+
+            make_model = COMPUTE_LIGHTCURVE(sim)
+            make_model.output_fname = 'mkn_model2_t{}_kh{}.h5'.format(int(t*1000), int(k*10)) # time in ms for a file
+            make_model.set_dyn_iso_aniso = "aniso"
+            make_model.set_psdyn_iso_aniso = "aniso"
+            make_model.set_wind_iso_aniso = ""
+            make_model.set_secular_iso_aniso = ""
+            make_model.set_par_war()
+            make_model.ejecta_vars['psdynamics']['override_m_ej'] = True
+            make_model.ejecta_vars['psdynamics']['m_ej'] =  m
+            make_model.ejecta_vars['psdynamics']['kappa_low'] = k
+            # print(make_model.ejecta_vars['psdynamics']); exit(0)
+
+            print("\tt:{} m:{} k:{}".format(t, m, k))
+            log_l_ = make_model.compute_save_lightcurve(write_output=True)
+            log_l[it][ik] = log_l_
+
+
+    print("All done")
+    table = []
+    for it, t in enumerate(ti):
+        table = np.append(table, np.array(log_l[it][:]))
+
+    table = np.reshape(table, (len(ti), len(kappas)))
+
+    df = pd.DataFrame(data=(np.array(table * -1, dtype=int)), index=ti, columns=kappas)#.corr()
+
+    print(df)
+
+
+    # df = pd.DataFrame({'kappas':kappas, 'ti':ti, 'logl':table})
+
+
+    sns.set()
+    f, ax = plt.subplots(figsize=(4.2, 3.6))
+    # flights_long = sns.load_dataset("flights")
+    sns.heatmap(df, annot=True, fmt='d', linewidths=.5, ax=ax, annot_kws={"rotation":45}, cbar_kws={"format": '%.1e'})
+    plt.gca().invert_yaxis()
+    ax.set_title(r"DD2\_M13641364\_M0\_LK\_SR\_R04")
+    ax.set_xlabel(r"$\kappa_{Ye > 0.25}$")
+    ax.set_ylabel(r"$t_{evol}$")
+    plt.savefig('{}.png'.format(Paths.plots+'mkn_logl_evol_kappahigh'), bbox_inches='tight', dpi=128)
+    plt.close()
+
+
+    exit(1)
+
+def compute_for_1_simulations_fully_informed_2_comp_varying_total_bern_mass_psdyn_theta():
+
+    import seaborn as sns
+    # flights = sns.load_dataset("flights")
+    # print(type(flights))
+    # exit(1)
+
+
+    from d1analysis import ADD_METHODS_1D
+
+    # times_to_extract_total_mass
+
+    thetas = [90., 75., 45., 25., 15., 0]
+    # kappas = [5, 10, 15, 20, 25, 30]
+    ti = [.05, 0.1, 0.15, 0.20]
+
+    sim = "DD2_M13641364_M0_LK_SR_R04"
+    o_data = ADD_METHODS_1D(sim)
+
+    log_l = [[0 for k in range(len(thetas))] for t in range(len(ti))]
+    for it, t in enumerate(ti):
+
+        times, masses = o_data.get_extrapolated_arr(v_n_x='t_tot_flux', v_n_y='mass_tot_flux',
+                                                    criterion='_0_b_w',
+                                                    x_left= None, x_right= 150, # percent
+                                                    x_start= 0.040, x_stop= None,
+                                                    depth= 1000, method= 1)
+        m = masses[find_nearest_index(times, t)]
+
+        for itheta, theta in enumerate(thetas):
+
+            make_model = COMPUTE_LIGHTCURVE(sim)
+            make_model.output_fname = 'mkn_model2_t{}_theta{}.h5'.format(int(t*1000), int(theta)) # time in ms for a file
+            make_model.set_dyn_iso_aniso = "aniso"
+            make_model.set_psdyn_iso_aniso = "aniso"
+            make_model.set_wind_iso_aniso = ""
+            make_model.set_secular_iso_aniso = ""
+            make_model.set_par_war()
+            make_model.source_name = 'AT2017gfo view_angle={}'.format(theta)
+            make_model.ejecta_vars['psdynamics']['override_m_ej'] = True
+            make_model.ejecta_vars['psdynamics']['m_ej'] =  m
+            # print(make_model.ejecta_vars['psdynamics']); exit(0)
+
+            print("\tt:{} m:{} theta:{}".format(t, m, theta))
+            log_l_ = make_model.compute_save_lightcurve(write_output=True)
+            log_l[it][itheta] = log_l_
+
+
+    print("All done")
+    table = []
+    for it, t in enumerate(ti):
+        table = np.append(table, np.array(log_l[it][:]))
+
+    table = np.reshape(table, (len(ti), len(thetas)))
+
+    df = pd.DataFrame(data=(np.array(table * -1, dtype=int)), index=ti, columns=thetas)#.corr()
+
+    print(df)
+
+
+    # df = pd.DataFrame({'kappas':kappas, 'ti':ti, 'logl':table})
+
+
+    sns.set()
+    f, ax = plt.subplots(figsize=(4.2, 3.6))
+    # flights_long = sns.load_dataset("flights")
+    sns.heatmap(df, annot=True, fmt='d', linewidths=.5, ax=ax, annot_kws={"rotation":45}, cbar_kws={"format": '%.1e'})
+    plt.gca().invert_yaxis()
+    ax.set_title(r"DD2\_M13641364\_M0\_LK\_SR\_R04")
+    ax.set_xlabel(r"Angle from rotational axis")
+    ax.set_ylabel(r"$t_{evol}$")
+    plt.savefig('{}.png'.format(Paths.plots+'mkn_logl_evol_theta'), bbox_inches='tight', dpi=128)
+    plt.close()
+
+
+    exit(1)
+
+def compute_for_1_simulations_fully_informed_2_comp_varying_total_kappa_low_theta():
+
+    import seaborn as sns
+    # flights = sns.load_dataset("flights")
+    # print(type(flights))
+    # exit(1)
+
+
+    from d1analysis import ADD_METHODS_1D
+
+    # times_to_extract_total_mass
+
+    thetas = [90., 75., 45., 25., 15., 0]
+    kappas = [0.5, 1., 1.5, 2., 2.5, 3]
+    ti = 0.20
+
+    sim = "DD2_M13641364_M0_LK_SR_R04"
+    o_data = ADD_METHODS_1D(sim)
+
+    times, masses = o_data.get_extrapolated_arr(v_n_x='t_tot_flux', v_n_y='mass_tot_flux',
+                                                criterion='_0_b_w',
+                                                x_left=None, x_right=150,  # percent
+                                                x_start=0.040, x_stop=None,
+                                                depth=1000, method=1)
+    m = masses[find_nearest_index(times, ti)]
+
+    log_l = [[0 for k in range(len(thetas))] for t in range(len(kappas))]
+    for ik, k in enumerate(kappas):
+
+        for itheta, theta in enumerate(thetas):
+
+            make_model = COMPUTE_LIGHTCURVE(sim)
+            make_model.output_fname = 'mkn_model2_t{}_k{}_theta{}.h5'.format(int(ti*1000), int(k*10), int(theta)) # time in ms for a file
+            make_model.set_dyn_iso_aniso = "aniso"
+            make_model.set_psdyn_iso_aniso = "aniso"
+            make_model.set_wind_iso_aniso = ""
+            make_model.set_secular_iso_aniso = ""
+            make_model.set_par_war()
+            make_model.source_name = 'AT2017gfo view_angle={}'.format(theta)
+            make_model.ejecta_vars['psdynamics']['override_m_ej'] = True
+            make_model.ejecta_vars['psdynamics']['m_ej'] =  m
+            make_model.ejecta_vars['psdynamics']['kappa_low'] = k
+            # print(make_model.ejecta_vars['psdynamics']); exit(0)
+
+            print("\tt:{} m:{} theta:{}, k:{}".format(ti, m, theta, k))
+            log_l_ = make_model.compute_save_lightcurve(write_output=True)
+            log_l[ik][itheta] = log_l_
+
+
+    print("All done")
+    table = []
+    for ik, k in enumerate(kappas):
+        table = np.append(table, np.array(log_l[ik][:]))
+
+    table = np.reshape(table, (len(kappas), len(thetas)))
+
+    df = pd.DataFrame(data=(np.array(table * -1, dtype=int)), index=kappas, columns=thetas)#.corr()
+
+    print(df)
+
+
+    # df = pd.DataFrame({'kappas':kappas, 'ti':ti, 'logl':table})
+
+
+    sns.set()
+    f, ax = plt.subplots(figsize=(4.2, 3.6))
+    # flights_long = sns.load_dataset("flights")
+    sns.heatmap(df, annot=True, fmt='d', linewidths=.5, ax=ax, annot_kws={"rotation":45}, cbar_kws={"format": '%.1e'})
+    plt.gca().invert_yaxis()
+    ax.set_title(r"$t:{} [ms]$ $m:{:.1f}$".format(ti, m * 1e2) + " $[10^{-2}M_{\odot}]$")
+    ax.set_xlabel(r"Angle from rotational axis")
+    ax.set_ylabel(r"$\kappa_{Ye < 0.25}$")
+    plt.savefig('{}.png'.format(Paths.plots+'mkn_logl_evol_kappa_low_theta_m{}'.format(int(ti*1000))), bbox_inches='tight', dpi=128)
+    plt.close()
+
+
+    exit(1)
+
+
+def compute_for_1_simulations_fully_informed_2_comp():
+
+    sim = "DD2_M13641364_M0_LK_SR_R04"
+
+    make_model = COMPUTE_LIGHTCURVE(sim)
+    make_model.output_fname = 'mkn_model2.h5'
+    make_model.set_dyn_iso_aniso = "aniso"
+    make_model.set_psdyn_iso_aniso = "aniso"
+    make_model.set_wind_iso_aniso = ""
+    make_model.set_secular_iso_aniso = ""
+    make_model.set_par_war()
+
+    print("\t Bern. Ej. Mass: {} ".format(make_model.ejecta_vars['psdynamics']['m_ej']))
+
+    make_model.compute_save_lightcurve(write_output=True)
+
+    exit(1)
+
+def compute_for_1_simulations_fully_informed_4comp():
+
+    sim = "LS220_M13641364_M0_LK_SR" # DD2_M13641364_M0_LK_SR_R04
+
+    make_model = COMPUTE_LIGHTCURVE(sim)
+    make_model.output_fname = 'mkn_model2_2.h5'
+    make_model.set_dyn_iso_aniso = "aniso"
+    make_model.set_psdyn_iso_aniso = "aniso"
+    make_model.set_wind_iso_aniso = "aniso"
+    # make_model.ejecta_vars["wind"]['xi_disk'] = 0.2
+    # make_model.ejecta_vars["wind"]['central_vel'] = 0.08
+    # make_model.ejecta_vars["wind"]['high_lat_op'] = 0.5
+    # make_model.ejecta_vars["wind"]['low_lat_op'] = 5.
+    make_model.set_secular_iso_aniso = "aniso"
+    # make_model.ejecta_vars["secular"]['xi_disk'] = 0.2
+    # make_model.ejecta_vars["secular"]['central_vel'] = 0.08
+    # make_model.ejecta_vars["secular"]['central_op'] = 5.0
+    make_model.set_par_war()
+
+    if sim == "LS220_M13641364_M0_LK_SR": make_model.glob_vars['m_disk'] = 0.07062 # USING non LK!
+
+    make_model.compute_save_lightcurve(write_output=True)
+
+    exit(1)
+
+def compute_for_1_simulations_fully_informed_2_comp_varying_eps():
+
+    from d1analysis import ADD_METHODS_1D
+
+    # times_to_extract_total_mass
+    eps = [2e18, 6e18, 12e18, 16e18, 20e18]
+    sim = "DD2_M13641364_M0_LK_SR_R04"
+    o_data = ADD_METHODS_1D(sim)
+
+    for e in eps:
+
+        print("\teps:{}".format(str(e).replace('+', '')))
+        # exit(1)
+        make_model = COMPUTE_LIGHTCURVE(sim)
+        make_model.output_fname = 'mkn_model2_eps{}.h5'.format(str(e).replace('+', '')) # time in ms for a file
+        make_model.set_dyn_iso_aniso = "aniso"
+        make_model.set_psdyn_iso_aniso = "aniso"
+        make_model.set_wind_iso_aniso = ""
+        make_model.set_secular_iso_aniso = ""
+        make_model.set_par_war()
+        make_model.glob_vars['eps0'] = float(e) # {2; 6; 12; 16; 20}
+        make_model.compute_save_lightcurve(write_output=True)
+
+    exit(1)
+
+
+def compute_for_3_simulations_fully_informed_4comp():
 
 
 
     sim = "DD2_M13641364_M0_SR"
-
-
     make_model = COMPUTE_LIGHTCURVE(sim)
     make_model.set_wind_iso_aniso = "aniso"
     # make_model.ejecta_vars["wind"]['xi_disk'] = 0.2
@@ -3237,7 +3987,7 @@ def compute_for_3_simulations_fully_informed():
     # make_model.ejecta_vars["secular"]['xi_disk'] = 0.2
     # make_model.ejecta_vars["secular"]['central_vel'] = 0.08
     # make_model.ejecta_vars["secular"]['central_op'] = 5.0
-
+    make_model.set_par_war()
     make_model.compute_save_lightcurve(write_output=True)
 
     " --- --- ---"
@@ -3254,7 +4004,7 @@ def compute_for_3_simulations_fully_informed():
     # make_model.ejecta_vars["secular"]['xi_disk'] = 0.2
     # make_model.ejecta_vars["secular"]['central_vel'] = 0.08
     # make_model.ejecta_vars["secular"]['central_op'] = 5.0
-
+    make_model.set_par_war()
     make_model.compute_save_lightcurve(write_output=True)
 
     " --- --- ---"
@@ -3271,7 +4021,7 @@ def compute_for_3_simulations_fully_informed():
     # make_model.ejecta_vars["secular"]['xi_disk'] = 0.2
     # make_model.ejecta_vars["secular"]['central_vel'] = 0.08
     # make_model.ejecta_vars["secular"]['central_op'] = 5.0
-
+    make_model.set_par_war()
     make_model.compute_save_lightcurve(write_output=True)
 
     exit(1)
@@ -3326,8 +4076,36 @@ def compute_for_3_simulations_varius_component_set():
 # compute_for_3_simulations_varius_component_set()
 
 if __name__ == '__main__':
-    pass
-    # compute_for_3_simulations_fully_informed()
+
+    ''' test '''
+    # o_dat = COMBINE_LIGHTCURVES("DD2_M13641364_M0_LK_SR_R04")
+    # # o_dat.get_table(); exit()
+    # o_dat.get_mkn_model("mkn_model2_m20.h5")
+    # # print(o_dat.get_mkn_model("mkn_model2_m20.h5")["psdynamics"])
+    # print(o_dat.get_attr("dynamics", "mkn_model2_m20.h5"))
+    # o_dat.get_model_min_max('g', "mkn_model2_m20.h5")
+    # print(o_dat.get_table("g"))
+    # exit(1)
+
+    ''' debugging '''
+    
+    compute_for_1_simulations_fully_informed_2_comp_varying_total_bern_mass()
+    # compute_for_1_simulations_fully_informed_2_comp_varying_total_kappa_low_theta()
+    # compute_for_1_simulations_fully_informed_2_comp_varying_total_bern_mass_psdyn_theta()
+    # compute_for_1_simulations_fully_informed_2_comp_varying_total_bern_mass_psdyn_opacity()
+    compute_for_1_simulations_fully_informed_2_comp()
+    compute_for_1_simulations_fully_informed_4comp()
+
+
+
+    # o_dat = EXTRACT_LIGHTCURVE("DD2_M13641364_M0_LK_SR_R04")
+    # o_dat.get_mismatch("Ks", "mkn_model2_t50.h5")
+    # exit(1)
+
+
+    # compute_for_1_simulations_fully_informed_2_comp_varying_total_bern_mass()
+    # compute_for_1_simulations_fully_informed_2_comp_varying_eps()
+
     # compute_for_3_simulations_varius_component_set()
 
 

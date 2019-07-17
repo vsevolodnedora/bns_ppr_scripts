@@ -76,7 +76,7 @@ def analyze_sim(sim, time_limit=0.030):
         it_, t_ = get_last_it_ppr(sim)
         # print(", PPR: [it:{:d} time:{:.3f}]".format(int(it_), t_)),
         if int(it) != int(it_):
-            Printcolor.red(", ppr REQUIRED [t_gw:{:.3f} t_ppr:{:3f}]".format(t, t_), ','),
+            Printcolor.red(", ppr REQUIRED [t_gw:{:.3f} t_ppr:{:.3f}]".format(t, t_), ','),
         else:
             Printcolor.green(", ppr is complete", ',')
 

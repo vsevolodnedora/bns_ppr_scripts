@@ -77,7 +77,7 @@ class LOAD_STORE_DATASETS:
     def __init__(self, sim):
 
         self.sim = sim
-
+        self.nlevels = 7
         self.gen_set = {'nlevels':7,
                         'sim': sim,
                         'file_for_it': 'H.norm2.asc',
@@ -89,8 +89,13 @@ class LOAD_STORE_DATASETS:
         self.output_it_map, self.it_time = \
             set_it_output_map(Paths.gw170817+self.sim+'/')
 
+        self.iterations = np.array(self.it_time[:, 0], dtype=int)
+        self.times =  np.array(self.it_time[:, 1], dtype=float)
+
         self.list_v_ns = ['rho', 'Y_e', 'temperature', 's_phi', 'entropy', 'dens_unbnd']
-        self.list_planes=['xy', 'xz']
+        self.list_planes=['xy', 'xz', 'xy']
+
+        self.set_use_new_output_if_duplicated = False
 
         self.dataset_matrix = [[[0
                                   for z in range(len(self.list_v_ns))]
@@ -154,8 +159,8 @@ class LOAD_STORE_DATASETS:
     def load_dataset(self, o_dir, plane, v_n):
         fname = v_n + '.' + plane + '.h5'
         files = locate(fname, root=self.gen_set['indir'] + o_dir +'/', followlinks=False)
-        print("\t Loading: {} plane:{} v_n:{} dataset"
-              .format(o_dir, plane, v_n))
+        print("\t Loading: {} plane:{} v_n:{} dataset ({} files)"
+              .format(o_dir, plane, v_n, len(files)))
         if len(files) > 1:
             raise ValueError("More than 1 file ({}) found. \nFile:{} location:{}"
                              "\nFiles: {}"
@@ -164,6 +169,9 @@ class LOAD_STORE_DATASETS:
             raise ValueError("NO fils found. \nlocation:{}"
                              .format(fname, o_dir))
         dset = h5.dataset(files)
+        # print("\t loading it:{} plane:{} v_n:{} dset:{}"
+        #       .format(o_dir, plane, v_n, dset))
+        dset.get_grid().mesh()
         self.dataset_matrix[self.i_output(o_dir)][self.i_plane(plane)][self.i_v_n(v_n)] = dset
 
     def i_output(self, o_dir):
@@ -184,10 +192,17 @@ class LOAD_STORE_DATASETS:
                 req_output_data_dir.append(output_data_dir)
 
         if len(req_output_data_dir) > 1:
-            raise ValueError("it:{} is found in multiple outputs:{}"
+            if self.set_use_new_output_if_duplicated:
+                print("Warning: it:{} is found in multiple outputs:{}"
+                             .format(it, req_output_data_dir))
+                return req_output_data_dir[0]
+
+            raise ValueError("it:{} is found in multiple outputs:{}\n"
+                             "to overwrite, set 'set_use_new_output_if_duplicated=True' "
                              .format(it, req_output_data_dir))
         elif len(req_output_data_dir) == 0:
-            raise ValueError("it:{} not found in a output_it_map:\n{}".format(it, self.output_it_map.keys()))
+            raise ValueError("it:{} not found in a output_it_map:\n{}\n"
+                                 .format(it, self.output_it_map.keys()))
         else:
             return req_output_data_dir[0]
 
@@ -232,18 +247,42 @@ class LOAD_STORE_DATASETS:
                           "is a slow process".format(len(self.output_it_map.keys())))
         for o_dir in self.output_it_map.keys():
             self.is_dataset_loaded(o_dir, plane, v_n)
+
+        self.set_all_it_times_from_outputs(plane, v_n)
+
         print('-' * 30 + '------DONE-----' + '-' * 30)
 
-    def get_all_iterations(self, plane, v_n):
+    def get_all_iterations_times(self, plane, v_n):
 
         iterations = []
+        times = []
         for o_dir in self.output_it_map.keys():
             if isinstance(self.dataset_matrix[self.i_output(o_dir)][self.i_plane(plane)][self.i_v_n(v_n)], int):
                 raise ValueError("Not all datasets are loaded. Missing: {}".format(o_dir))
             dset = self.dataset_matrix[self.i_output(o_dir)][self.i_plane(plane)][self.i_v_n(v_n)]
-            iterations.append(dset.iterations)
+            # iterations.append(dset.iterations)
+            for it in dset.iterations:
+                iterations.append(it)
+                time = dset.get_time(it) * 0.004925794970773136 / 1000
+                times.append(time)
+                # print("it:{}, time:{}".format(it, time))
 
-        return list(set([item for sublist in iterations for item in sublist]))
+        assert len(list(set(iterations))) == len(list(set(times)))
+
+        iterations = np.sort(list(set(iterations)))
+        times = np.sort(list(set(times)))
+
+        return iterations, times
+
+    def set_all_it_times_from_outputs(self, plane, v_n):
+
+        self.iterations, self.times = self.get_all_iterations_times(plane, v_n)
+        print('\tIterations [{}->{}] and times [{:.3f}->{:.3f}] have been reset.'
+              .format(self.iterations[0], self.iterations[-1],
+                      self.times[0], self.times[-1]))
+
+        # return list(set([item for sublist in iterations for item in sublist])), \
+        #        list(set([item for sublist in iterations for item in sublist]))
 
     # def get_all_timesteps(self, plane, v_n):
     #
@@ -391,15 +430,228 @@ class EXTRACT_STORE_DATA(LOAD_STORE_DATASETS):
 
     # ----------- TIME
 
-    def get_time(self, it):
-        self.check_it(it)
-        return self.it_time[np.where(self.it_time[:,0] == it), 1] * time_constant / 1000
+    # def get_time(self, it):
+    #     self.check_it(it)
+    #     return float(self.it_time[np.where(self.it_time[:,0] == it), 1][0]) * time_constant / 1000
 
 
 
     # def get_time_(self, it):
     #     return self.get_time__(it)
 
+class EXTRACT_FOR_RL(EXTRACT_STORE_DATA):
+
+    def __init__(self, sim):
+        EXTRACT_STORE_DATA.__init__(self, sim)
+
+        self.list_grid_v_ns = ["x", "y", "z", "delta"]
+
+
+        self.extracted_grid_matrix = [[[[np.zeros(0,)
+                            for z in range(len(self.list_grid_v_ns))]
+                            for j in range(self.nlevels)]
+                            for k in range(len(self.list_planes))]
+                            for s in range(len(self.it_time[:,0]))]
+
+        self.extracted_data_matrix = [[[[np.zeros(0,)
+                            for z in range(len(self.list_v_ns))]
+                            for j in range(self.nlevels)]
+                            for k in range(len(self.list_planes))]
+                            for s in range(len(self.it_time[:,0]))]
+
+        self.default_v_n = "rho"
+
+    def check_rl(self, rl):
+        if rl < 0:
+            raise ValueError("Unphysical rl:{} ".format(rl))
+        if rl < 0 or rl > self.nlevels:
+            raise ValueError("rl is not in limits: {}"
+                             .format(rl, self.nlevels))
+
+    def i_rl(self, rl):
+        return int(rl)
+
+    def check_grid_v_n(self, v_n):
+        if not v_n in self.list_grid_v_ns:
+            raise NameError("v_n:{} not in list_grid_v_ns:{}"
+                            .format(v_n, self.list_grid_v_ns))
+
+    def i_gr_v_n(self, v_n):
+        return int(self.list_grid_v_ns.index(v_n))
+
+    def __extract_grid_data_rl(self, it, plane, rl, grid):
+
+        coords = grid.coordinates()
+        mesh = list(np.meshgrid(coords[self.i_rl(rl)], indexing='ij'))
+        points = np.column_stack([x.flatten() for x in mesh])
+        xyz = []
+        delta = grid.levels[self.i_rl(rl)].delta
+        # for x in mesh:
+        #     xyz.append(x)
+        #     print("x: {} ".format(x.shape))
+        # print(len(coords))
+        # # print(mesh)
+        # print(len(mesh))
+        # print(len(xyz))
+        # print(points.shape)
+
+        self.extracted_grid_matrix[self.i_it(it)][self.i_plane(plane)][self.i_rl(rl)][self.i_gr_v_n("delta")] = delta
+        if plane == "xy":
+            x, y = grid.mesh()[rl]
+            # print(x.shape)
+            # print(y.shape)
+            self.extracted_grid_matrix[self.i_it(it)][self.i_plane(plane)][self.i_rl(rl)][self.i_gr_v_n("x")] = x
+            self.extracted_grid_matrix[self.i_it(it)][self.i_plane(plane)][self.i_rl(rl)][self.i_gr_v_n("y")] = y
+        elif plane == "xz":
+            x, z = grid.mesh()[rl]
+            # print(x.shape)
+            # print(z.shape)
+            self.extracted_grid_matrix[self.i_it(it)][self.i_plane(plane)][self.i_rl(rl)][self.i_gr_v_n("x")] = x
+            self.extracted_grid_matrix[self.i_it(it)][self.i_plane(plane)][self.i_rl(rl)][self.i_gr_v_n("z")] = z
+        else:
+            raise NameError("Plane: {} is not recognized")
+        # exit(0)
+
+    def extract_grid_data_rl(self, it, plane, rl, v_n):
+
+        self.check_grid_v_n(v_n)
+
+        for data_v_n in self.list_v_ns:
+            # scrolling through all possible v_ns, looking for the one loaded
+            if not isinstance(self.grid_matrix[self.i_it(it)][self.i_plane(plane)][self.i_v_n(data_v_n)], int):
+                grid = self.get_grid(it, plane, data_v_n)
+                self.__extract_grid_data_rl(it, plane, rl, grid)
+                return 0
+        print("\tNo pre-loaded data found. Loading default ({}))".format(self.default_v_n))
+        grid = self.get_grid(it, plane, self.default_v_n)
+        self.__extract_grid_data_rl(it, plane, rl, grid)
+        return 0
+
+
+    def is_grid_extracted_for_rl(self, it, plane, rl, v_n):
+
+        arr = self.extracted_grid_matrix[self.i_it(it)][self.i_plane(plane)][self.i_rl(rl)][self.i_gr_v_n(v_n)]
+        if len(arr) == 0:
+            self.extract_grid_data_rl(it, plane, rl, v_n)
+
+    def get_grid_v_n_rl(self, it, plane, rl, v_n):
+
+        self.check_grid_v_n(v_n)
+        self.check_plane(plane)
+        self.check_it(it)
+        self.check_rl(rl)
+
+        self.is_grid_extracted_for_rl(it, plane, rl, v_n)
+
+        data = self.extracted_grid_matrix[self.i_it(it)][self.i_plane(plane)][self.i_rl(rl)][self.i_gr_v_n(v_n)]
+        return data
+
+
+
+    def extract_data_rl(self, it, plane, rl, v_n):
+
+        data = self.get_data(it, plane, v_n)
+        data = np.array(data[self.i_rl(rl)])
+
+        self.extracted_data_matrix[self.i_it(it)][self.i_plane(plane)][self.i_rl(rl)][self.i_v_n(v_n)] = data
+
+    def is_data_extracted_for_rl(self, it, plane,rl, v_n):
+
+        arr = self.extracted_data_matrix[self.i_it(it)][self.i_plane(plane)][self.i_rl(rl)][self.i_v_n(v_n)]
+        if len(arr) == 0:
+            self.extract_data_rl(it, plane, rl, v_n)
+
+    def get_data_rl(self, it, plane, rl, v_n):
+
+        self.check_v_n(v_n)
+        self.check_plane(plane)
+        self.check_it(it)
+        self.check_rl(rl)
+
+        self.is_data_extracted_for_rl(it, plane, rl, v_n)
+
+        data = self.extracted_data_matrix[self.i_it(it)][self.i_plane(plane)][self.i_rl(rl)][self.i_v_n(v_n)]
+        return data
+
+
+
+
+class COMPUTE_STORE(EXTRACT_FOR_RL):
+
+    def __init__(self, sim):
+        EXTRACT_FOR_RL.__init__(self, sim)
+
+class MASK_STORE(COMPUTE_STORE):
+
+    def __init__(self, fname, symmetry=None):
+        COMPUTE_STORE.__init__(self, fname, symmetry)
+
+        rho_const = 6.176269145886162e+17
+        self.mask_setup = {'rm_rl': True,  # REMOVE previouse ref. level from the next
+                           'rho': [6.e4 / rho_const, 1.e13 / rho_const],  # REMOVE atmo and NS
+                           'lapse': [0.15, 1.]} # remove apparent horizon
+
+        self.mask_matrix = [np.ones(0, dtype=bool) for x in range(self.nlevels)]
+
+        self.list_mask_v_n = ["x", "y", "z"]
+
+
+    def compute_mask(self):
+
+        nlevelist = np.arange(self.nlevels, 0, -1) - 1
+
+        x = []
+        y = []
+        z = []
+
+        for ii, rl in enumerate(nlevelist):
+            x.append(self.get_comp_data(rl, "x")[3:-3, 3:-3, 3:-3])
+            y.append(self.get_comp_data(rl, "y")[3:-3, 3:-3, 3:-3])
+            z.append(self.get_comp_data(rl, "z")[3:-3, 3:-3, 3:-3])
+            mask = np.ones(x[ii].shape, dtype=bool)
+            if ii > 0 and self.mask_setup["rm_rl"]:
+                x_ = (x[ii][:, :, :] <= x[ii - 1][:, 0, 0].max()) & (
+                        x[ii][:, :, :] >= x[ii - 1][:, 0, 0].min())
+                y_ = (y[ii][:, :, :] <= y[ii - 1][0, :, 0].max()) & (
+                        y[ii][:, :, :] >= y[ii - 1][0, :, 0].min())
+                z_ = (z[ii][:, :, :] <= z[ii - 1][0, 0, :].max()) & (
+                        z[ii][:, :, :] >= z[ii - 1][0, 0, :].min())
+                mask = mask & np.invert((x_ & y_ & z_))
+
+            for v_n in self.mask_setup.keys()[1:]:
+                self.check_v_n(v_n)
+                if len(self.mask_setup[v_n]) != 2:
+                    raise NameError("Error. 2 values are required to set a limit. Give {} for {}"
+                                    .format(self.mask_setup[v_n], v_n))
+                arr_1 = self.get_comp_data(rl, v_n)[3:-3, 3:-3, 3:-3]
+                min_val = float(self.mask_setup[v_n][0])
+                max_val = float(self.mask_setup[v_n][1])
+                mask_i = (arr_1 > min_val) & (arr_1 < max_val)
+                mask = mask & mask_i
+                del arr_1
+                del mask_i
+
+            self.mask_matrix[rl] = mask
+
+    def is_mask_available(self, rl):
+        mask = self.mask_matrix[rl]
+        if len(mask) == 0:
+            self.compute_mask()
+
+    def get_masked_data(self, rl, v_n):
+        self.check_v_n(v_n)
+        self.is_available(rl, v_n)
+        self.is_mask_available(rl)
+        data = np.array(self.get_comp_data(rl, v_n))[3:-3, 3:-3, 3:-3]
+        mask = self.mask_matrix[rl]
+        return data[mask]
+
+    def __delete__(self, instance):
+        instance.dfile.close()
+        instance.data_matrix = [[np.zeros(0, )
+                                 for x in range(self.nlevels)]
+                                 for y in range(len(self.list_all_v_ns))]
+        instance.mask_matrix = [np.ones(0, dtype=bool) for x in range(self.nlevels)]
 
 class CYLINDRICAL_GRID:
     """
@@ -425,8 +677,8 @@ class CYLINDRICAL_GRID:
     def __init__(self, grid_info):
 
         self.grid_info = grid_info # "n_r", "n_phi", "n_z"
-
-        self.grid_v_ns = ["x_cyl", "y_cyl", "z_cyl",
+        self.grid_type = "cyl"
+        self.list_int_grid_v_ns = ["x_cyl", "y_cyl", "z_cyl",
                           "r_cyl", "phi_cyl",
                           "dr_cyl", "dphi_cyl", "dz_cyl"]
 
@@ -439,6 +691,8 @@ class CYLINDRICAL_GRID:
             = np.meshgrid(r_cyl, phi_cyl, z_cyl, indexing='ij')
         self.x_cyl_3d = self.r_cyl_3d * np.cos(self.phi_cyl_3d)
         self.y_cyl_3d = self.r_cyl_3d * np.sin(self.phi_cyl_3d)
+
+        # print(self.z_cyl_3d[0, 0, :]); exit(1)
 
         print("\t GRID: [phi:r:z] = [{}:{}:{}]".format(len(phi_cyl), len(r_cyl), len(z_cyl)))
 
@@ -477,6 +731,14 @@ class CYLINDRICAL_GRID:
         dz_cyl = np.diff(z_cyl_f)[np.newaxis, np.newaxis, :]
 
         return phi_cyl, r_cyl, z_cyl, dphi_cyl, dr_cyl, dz_cyl
+
+    def get_xi(self):
+        return np.column_stack([self.x_cyl_3d.flatten(),
+                                self.y_cyl_3d.flatten(),
+                                self.z_cyl_3d.flatten()])
+
+    def get_shape(self):
+        return self.x_cyl_3d.shape
 
     # generic methods to be present in all INTERPOLATION CLASSES
     # def get_int_arr(self, arr_3d):
@@ -532,21 +794,41 @@ class CYLINDRICAL_GRID:
             d3arr = self.dz_cyl_3d
         else:
             raise NameError("v_n: {} not recogized in grid. Available:{}"
-                            .format(v_n, self.grid_v_ns))
+                            .format(v_n, self.list_int_grid_v_ns))
 
         if projection == 'xyz':
             return d3arr
         elif projection == 'xy':
             return d3arr[:, :, 0]
         elif projection == 'xz':
-            return d3arr[:, 0, :]
-        elif projection == 'yz':
             return d3arr[0, :, :]
+        elif projection == 'yz':
+            return d3arr[:, 0, :]
         else:
             raise NameError("projection: {} not recogized".format(projection))
 
+    def save_grid(self, sim, projection):
 
-class INTERPOLATE_STORE(EXTRACT_STORE_DATA):
+        grid_type = self.grid_type
+
+        path = Paths.ppr_sims + sim + "/res_2d/"
+        if projection == 'xyz' or projection == None:
+            fname = path + self.grid_type  + '_' + 'grid.h5'
+        else:
+            fname = path + self.grid_type + '_' + 'grid' + '_' + projection + '.h5'
+
+        outfile = h5py.File(fname, "w")
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # print("Saving grid...")
+        for v_n in self.list_int_grid_v_ns:
+            outfile.create_dataset(v_n, data=self.get_int_grid(v_n, projection))
+        outfile.close()
+
+
+class INTERPOLATE_STORE_2D(EXTRACT_STORE_DATA):
     """
     blablabla
     """
@@ -596,15 +878,58 @@ class INTERPOLATE_STORE(EXTRACT_STORE_DATA):
               .format(it, plane, v_n, self.grid_set['type']))
 
         data = self.get_data(it, plane, v_n)
+        # print("\t using it:{} plane:{} v_n:{} dset:{}"
+        #       .format(it, plane, v_n, data))
         grid = self.get_grid(it, plane, v_n)
-
+        # print(grid)
         v_n_interpolator = Interpolator(grid, data, interp=0)
+        # print("data")
+        # print(data)
+        # print('\n')
+
+        self.coords = grid.coordinates()
+        for i in range(len(grid)):
+            if i == len(grid)-1:
+                mesh = list(np.meshgrid(self.coords[i], indexing='ij'))
+                points = np.column_stack([x.flatten() for x in mesh])
+                for x in mesh:
+                    print("x: {} ".format(x.shape))
+                print("x[0]: {}".format(x[0].shape))
+                print("x[1]: {}".format(x[1].shape))
+                print("data: {} ".format(np.array(data[i]).shape))
+                print("data: {}".format(np.array(data[i]).shape))
+                print(points.shape)
+                print(len(mesh))
+                # exit(1)
+                data = np.array(data[i])
+                from matplotlib import colors
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                norm = colors.LogNorm(vmin=data.min(), vmax=data.max())
+                ax.pcolormesh(x[0], x[1], data.T, norm=norm, cmap="inferno_r")
+                plt.ylim(0, 50)
+                plt.title(r"$xz$-plane")
+                plt.savefig('{}'.format(Paths.ppr_sims + self.sim + '/res_2d/' + "{}_{}_{}.png"
+                                        .format(it, plane, v_n)), bbox_inches='tight', dpi=128)
+                print("saved pi_test2.png")
+                plt.close()
+
+
+            # print(data[i])
+        exit(1)
+
 
         if self.grid_set['type'] == 'cylindrical':
 
             x_cyl_2d = self.new_grid_cl.get_int_grid('x_cyl', plane)
             y_cyl_2d = self.new_grid_cl.get_int_grid('y_cyl', plane)
             z_cyl_2d = self.new_grid_cl.get_int_grid('z_cyl', plane)
+
+            # print(x_cyl_2d[:, 0])
+            # print('\n')
+            # print(z_cyl_2d[0, :])
+            # print('\n')
+
             if plane == 'xy':
                 xi = np.column_stack([x_cyl_2d.flatten(), y_cyl_2d.flatten()])
             elif plane == 'xz':
@@ -614,9 +939,31 @@ class INTERPOLATE_STORE(EXTRACT_STORE_DATA):
             else:
                 raise NameError("plane:{} not supported in a new grid creation".format(plane))
 
+            # print("\n")
+            # for xii in xi:
+            #     print(xii)
+            # print("\n")
             res_arr_2d = v_n_interpolator(xi).reshape(x_cyl_2d.shape)
+            # print(res_arr_2d)
+            # exit(1)
         else:
             raise NameError("Grid class for '{}' is not found".format(self.grid_set['type']))
+
+
+        data = res_arr_2d
+        from matplotlib import colors
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        norm = colors.LogNorm(vmin=data.min(), vmax=data.max())
+        ax.pcolormesh(x_cyl_2d[:, 0], z_cyl_2d[0, :], data[:, :].T, norm=norm, cmap="inferno_r")
+        plt.ylim(0,50)
+        plt.title(r"$xz$-plane")
+        plt.savefig('{}'.format(Paths.ppr_sims+self.sim+'/res_2d/' + "{}_{}_{}.png"
+                                .format(it, plane, v_n)), bbox_inches='tight', dpi=128)
+        print("saved pi_test2.png")
+        plt.close()
+        # exit(1)
+
 
         self.intdata_matrix[self.i_it(it)][self.i_plane(plane)][self.i_v_n(v_n)] = \
             res_arr_2d
@@ -648,8 +995,284 @@ class INTERPOLATE_STORE(EXTRACT_STORE_DATA):
         self.is_data_interpolated(it, plane, v_n)
         self.intdata_matrix[self.i_it(it)][self.i_plane(plane)][self.i_v_n(v_n)] = 0
 
+    def save_all(self, plane, v_n):
+
+        self.load_all(plane, v_n)
+        self.iterations, self.times = self.get_all_iterations_times(plane, v_n)
+        # self.iterations = np.array(self.iterations, dtype=int)
+
+        self.set_use_new_output_if_duplicated = True
+
+        path = Paths.ppr_sims + self.sim + "/res_2d/"
+        outfname = path + self.new_grid_cl.grid_type + \
+                            '_' + v_n + '_' + plane + '.h5'
+
+        if os.path.isfile(outfname):
+            print("Rewriting file{}".format(outfname))
+            os.remove(outfname)
+        else:
+            print("Writing file:{}".format(outfname))
+
+        outfile = h5py.File(path + self.new_grid_cl.grid_type + \
+                            '_' + v_n + '_' + plane + '.h5', "w")
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        outfile.create_dataset("iterations", data=self.iterations)
+        outfile.create_dataset("times", data=self.times)
+
+
+        # print("Saving grid...")
+        for it, t in zip(self.iterations, self.times):
+            print("Writing: it:{} time:{}".format(it, t))
+            outfile.create_dataset("it={}".format(int(it)),
+                                   data=self.get_int(it, plane, v_n))
+        outfile.close()
+
     # def get_time(self, it):
     #     return self.get_time_(it)
+
+
+""" --- --- --- """
+
+class LOAD_INT_DATA_2D:
+
+    def __init__(self, sim):
+
+        self.sim = sim
+
+        self.grid_type = "cyl"
+
+        self.list_v_ns = ['rho', 'Y_e', 'temperature', 's_phi', 'entropy', 'dens_unbnd']
+        self.list_planes=['xy', 'xz']
+
+        self.set_use_new_output_if_duplicated = False
+
+        self.output_it_map, self.it_time = \
+            set_it_output_map(Paths.gw170817+self.sim+'/')
+
+        self.iterations = list(self.it_time[:, 0])
+        self.times = list(self.it_time[:, 1])
+
+        self.data_matrix = [[[np.zeros(0,)
+                                  for z in range(len(self.list_v_ns))]
+                                  for k in range(len(self.list_planes))]
+                                  for s in range(len(self.iterations))]
+
+        self.list_grid_v_ns = []
+        self.grid_matrix = [[np.zeros(0, )
+                             for z in range(len(self.list_grid_v_ns))]
+                            for k in range(len(self.list_planes))]
+
+    def check_v_n(self, v_n):
+        if v_n not in self.list_v_ns:
+            raise NameError("v_n:{} not in the v_n list (in the class)\n{}".format(v_n, self.list_v_ns))
+
+    def check_plane(self, plane):
+        if plane not in self.list_planes:
+            raise NameError("plane:{} not in the plane_list (in the class)\n{}".format(plane, self.list_planes))
+
+    def i_v_n(self, v_n):
+        self.check_v_n(v_n)
+        return int(self.list_v_ns.index(v_n))
+
+    def i_plane(self, plane):
+        self.check_plane(plane)
+        return int(self.list_planes.index(plane))
+
+    def check_it(self, it):
+        if not it in self.iterations:
+            raise NameError("it:{} is not in the list of iterations \n{}"
+                            .format(it, self.iterations))
+
+    def i_it(self, it):
+        return int(self.iterations.index(it))
+
+    def load_iteration_list(self):
+
+        path = Paths.ppr_sims + self.sim + "/res_2d/"
+        for v_n in self.list_v_ns:
+            for plane in self.list_planes:
+                fname = path + self.grid_type + \
+                            '_' + v_n + '_' + plane + '.h5'
+                if os.path.isfile(fname):
+                    dfile = h5py.File(fname, "r")
+                    iterations = np.array(dfile["iterations"], dtype=int)
+                    times = np.array(dfile["times"], dtype=float)
+                    self.iterations = list(iterations)
+                    self.times = list(times)
+                    self.data_matrix = [[[np.zeros(0, )
+                                             for z in range(len(self.list_v_ns))]
+                                            for k in range(len(self.list_planes))]
+                                           for s in range(len(self.iterations))]
+                    print("\titerations ({}) are set".format(len(self.iterations)))
+                    return 0
+        raise IOError("for sim:{} no data for loading iterations found. "
+                      "no data for any of the files in a for of "
+                      "fname = path + self.grid_type + '_' + v_n + '_' + plane + '.h5'")
+
+    def load_data(self, plane, v_n):
+        path = Paths.ppr_sims + self.sim + "/res_2d/"
+        fname = path + self.grid_type + '_' + v_n + '_' + plane + '.h5'
+
+        if not os.path.isfile(fname):
+            raise IOError("File: {} not found"
+                          .format(fname))
+
+        dfile = h5py.File(fname, "r")
+        iterations = np.array(dfile["iterations"], dtype=int)
+
+        for it in iterations:
+
+            if int(it) not in self.iterations:
+                raise ValueError("it:{} found in dataset:{} "
+                                 "is not in preloaded iteration list"
+                                 "\n{}"
+                                 .format(it, fname, self.iterations))
+
+            self.data_matrix[self.i_it(it)][self.i_plane(plane)][self.i_v_n(v_n)] = \
+                np.array(dfile["it={}".format(int(it))])
+
+
+
+    def is_data_loaded(self, it, plane, v_n):
+
+        if len(self.data_matrix[self.i_it(it)][self.i_plane(plane)][self.i_v_n(v_n)]) == 0:
+            self.load_data(plane, v_n)
+
+    def is_grid_loaded(self, plane = 'xy'):
+
+        if len(self.list_grid_v_ns) == 0:
+            self.load_grid(plane)
+
+    def load_grid(self, plane):
+
+        ffpath = ''
+
+        path = Paths.ppr_sims + self.sim + "/res_2d/"
+        fname1 = path + self.grid_type + '_' + 'grid.h5'
+        if os.path.isfile(fname1):
+            ffpath = fname1
+        fname2 = path + self.grid_type + '_' + 'grid' + '_' + plane + '.h5'
+        if os.path.isfile(fname2):
+            ffpath = fname2
+        if ffpath == '':
+            raise IOError("Grid not found. Neither {} nor {} is found"
+                          .format(fname1,fname2))
+
+        dfile = h5py.File(ffpath, "r")
+
+        self.list_grid_v_ns = []
+        for v_n in dfile:
+            self.list_grid_v_ns.append(v_n)
+
+        self.grid_matrix = [[np.zeros(0, )
+                              for z in range(len(self.list_grid_v_ns))]
+                              for k in range(len(self.list_planes))]
+
+        for i_v_n, v_n in enumerate(self.list_grid_v_ns):
+            self.grid_matrix[self.i_plane(plane)][i_v_n] = np.array(dfile[v_n])
+
+
+
+
+
+        if plane == 'xyz' or plane == None:
+            fname = path + self.grid_type  + '_' + 'grid.h5'
+        else:
+            fname = path + self.grid_type + '_' + 'grid' + '_' + plane + '.h5'
+
+    def i_gr_v_n(self, v_n):
+        return int(self.list_grid_v_ns.index(v_n))
+
+    def get_int_data(self, it, plane, v_n):
+        self.check_v_n(v_n)
+        self.check_plane(plane)
+        self.is_data_loaded(it, plane, v_n)
+        return self.data_matrix[self.i_it(it)][self.i_plane(plane)][self.i_v_n(v_n)]
+
+    def get_int_grid(self, plane, v_n):
+
+        self.is_grid_loaded(plane)
+        if not v_n in self.list_grid_v_ns:
+            raise NameError("v_n:{} not in the loaded list of grid v_ns:{}"
+                            .format(v_n, self.list_grid_v_ns))
+
+        return self.grid_matrix[self.i_plane(plane)][self.i_gr_v_n(v_n)]
+
+
+class ADD_METHODS_FOR_2DINT_DATA(LOAD_INT_DATA_2D):
+
+    def __init__(self, sim):
+
+        LOAD_INT_DATA_2D.__init__(self, sim)
+
+    def fill_pho0_and_phi2pi(self, phi1d_arr, z2d_arr):
+        # adding phi = 360 point *copy of phi = 358(
+        phi1d_arr = np.append(phi1d_arr, 2 * np.pi)
+        z2d_arr = np.vstack((z2d_arr.T, z2d_arr[:, -1])).T
+        # adding phi == 0 point (copy of phi=1)
+        phi1d_arr = np.insert(phi1d_arr, 0, 0)
+        z2d_arr = np.vstack((z2d_arr[:, 0], z2d_arr.T)).T
+        return phi1d_arr, z2d_arr
+
+
+    def get_modified_2d_data(self, it, plane, v_n_x, v_n_y, v_n, mod):
+
+        x_arr = self.get_int_grid(plane, v_n_y)
+        y_arr = self.get_int_grid(plane, v_n_x)
+        z_arr = self.get_int_data(it, plane, v_n)
+
+
+        if mod == 'xy slice':
+            return np.array(x_arr[:, 0]), np.array(y_arr[0, :]), np.array(z_arr),
+
+        elif mod == 'fill_phi':
+            r2d_arr = np.array(x_arr[:, :])
+            phi_arr = np.array(y_arr[0, :])
+            z2d_arr = np.array(z_arr[:, :])
+
+            phi_arr, rz2d = self.fill_pho0_and_phi2pi(phi_arr, z2d_arr)
+
+            return np.array(x_arr[:, 0]), phi_arr, rz2d
+
+        elif mod == 'fill_phi *r':
+            r2d_arr = np.array(x_arr[:, :])
+            phi_arr = np.array(y_arr[0, :])
+            z2d_arr = np.array(z_arr[:, :])
+
+            rz2d = r2d_arr * z2d_arr
+            phi_arr, rz2d = self.fill_pho0_and_phi2pi(phi_arr, rz2d)
+
+            return np.array(x_arr[:, 0]), phi_arr, rz2d
+
+        elif mod == 'fill_phi *r log':
+
+            r2d_arr = np.array(x_arr[:, :])
+            phi_arr = np.array(y_arr[0, :])
+            z2d_arr = np.array(z_arr[:, :])
+
+            rz2d = r2d_arr * z2d_arr
+            phi_arr, rz2d = self.fill_pho0_and_phi2pi(phi_arr, rz2d)
+
+            return np.array(x_arr[:, 0]), phi_arr, np.log10(rz2d)
+
+        elif mod == 'fill_phi -ave(r)':
+
+            r2d_arr = np.array(x_arr[:, :])
+            phi_arr = np.array(y_arr[0, :])
+            z2d_arr = np.array(z_arr[:, :])
+
+            for i in range(len(x_arr[:, 0])):
+                z2d_arr[i, :] = z2d_arr[i, :] - (np.sum(z2d_arr[i, :]) / len(z2d_arr[i, :]))
+
+            phi_arr, rz2d = self.fill_pho0_and_phi2pi(phi_arr, z2d_arr)
+
+            return np.array(x_arr[:, 0]), phi_arr, rz2d
+
+        else:
+            raise NameError("Unknown 'mod' parameter:{} ".format(mod))
 
 
 class PLOT_MANY:
@@ -2235,8 +2858,8 @@ class COMPUTE_STORE_DESITYMODES:
 
         self.data.load_all(self.gen_set['plane'], self.gen_set['v_n'])
 
-        self.iterations = self.data.get_all_iterations(self.gen_set["plane"],
-                                                       self.gen_set["v_n"])
+        self.iterations = self.data.get_all_iterations_times(self.gen_set["plane"],
+                                                             self.gen_set["v_n"])
         self.iterations=np.array(self.iterations, dtype=int)
         self.iterations.sort(axis=0)
 
@@ -2494,7 +3117,7 @@ def plot_density_modes(sim):
 
 def task_movie1():
 
-    int_ = INTERPOLATE_STORE("LS220_M13641364_M0_SR")
+    int_ = INTERPOLATE_STORE_2D("LS220_M13641364_M0_SR")
     pl_ = PLOT_MANY(int_)
 
     pl_.gen_set = {
@@ -2516,7 +3139,7 @@ def task_movie1():
 
     int_.load_all(plot_dic1['plane'], plot_dic1['v_n'])
 
-    int_.iterations = int_.get_all_iterations(plot_dic1["plane"], plot_dic1["v_n"])
+    int_.iterations = int_.get_all_iterations_times(plot_dic1["plane"], plot_dic1["v_n"])
     int_.iterations = np.array(int_.iterations, dtype=int)
     int_.iterations.sort(axis=0)
 
@@ -2530,7 +3153,7 @@ def task_movie1():
 
 def task_movie2():
 
-    int_ = INTERPOLATE_STORE("LS220_M13641364_M0_SR")
+    int_ = INTERPOLATE_STORE_2D("LS220_M13641364_M0_SR")
     pl_ = PLOT_MANY(int_)
 
     pl_.gen_set = {
@@ -2577,7 +3200,7 @@ def task_movie2():
 
     int_.load_all(plot_dic1['plane'], plot_dic1['v_n'])
 
-    int_.iterations = int_.get_all_iterations(plot_dic1["plane"], plot_dic1["v_n"])
+    int_.iterations = int_.get_all_iterations_times(plot_dic1["plane"], plot_dic1["v_n"])
     int_.iterations = np.array(int_.iterations, dtype=int)
     int_.iterations.sort(axis=0)
 
@@ -2593,7 +3216,7 @@ def task_movie2():
 
 def task_plot_many(sim):
 
-    int_ = INTERPOLATE_STORE(sim)
+    int_ = INTERPOLATE_STORE_2D(sim)
     pl_ = PLOT_MANY(int_)
 
     pl_.gen_set = {
@@ -2699,6 +3322,58 @@ def get_nearest_iterations_for_times(sim, required_times, file_for_it="dens.norm
 
 
 if __name__ == '__main__':
+
+    ''' --- DEBUGGING --- '''
+    sim = "DD2_M15091235_M0_LK_HR"
+    it = 366592
+
+    rl = 3
+    v_n = "rho"
+    o_rl = EXTRACT_FOR_RL(sim)
+
+
+    from matplotlib import colors
+    fig = plt.figure(figsize=(3., 6.))
+
+
+    plane = "xy"
+    x = o_rl.get_grid_v_n_rl(it, plane, rl, "x")
+    y = o_rl.get_grid_v_n_rl(it, plane, rl, "y")
+    data_xy = o_rl.get_data_rl(it, plane, rl, v_n)
+
+    ax = fig.add_subplot(212)
+    norm = colors.LogNorm(vmin=data_xy.min(), vmax=data_xy.max())
+    ax.pcolormesh(x, y, data_xy, norm=norm, cmap="inferno_r")
+
+    ''' --- '''
+
+    plane = "xz"
+    x = o_rl.get_grid_v_n_rl(it, plane, rl, "x")
+    z = o_rl.get_grid_v_n_rl(it, plane, rl, "z")
+    data_xz = o_rl.get_data_rl(it, plane, rl, v_n)
+
+    ax = fig.add_subplot(211)
+    norm = colors.LogNorm(vmin=data_xz.min(), vmax=data_xz.max())
+    ax.pcolormesh(x, z, data_xz, norm=norm, cmap="inferno_r")
+
+
+    print("x shape {}".format(x.shape))
+    print("y shape {}".format(y.shape))
+    print("z shape {}".format(z.shape))
+    print("data_xy shape {}".format(data_xy.shape))
+    print("data_xz shape {}".format(data_xz.shape))
+
+    # plt.ylim(0, 50)
+    # plt.ylim(0, 50)
+    plt.title(r"$xz$-plane")
+    plt.savefig('{}'.format(Paths.ppr_sims + sim + '/res_2d/' + "{}_{}.png"
+                            .format(it, v_n)), bbox_inches='tight', dpi=128)
+    print("saved pi_test2.png")
+    plt.close()
+
+    exit(0)
+
+
 
     sim = "LS220_M13641364_M0_SR"
 

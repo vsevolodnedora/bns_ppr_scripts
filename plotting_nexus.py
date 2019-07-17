@@ -17,22 +17,27 @@ class BASIC_PARTS():
 
     def set_plot_title(self, ax, plot_dic):
         if "title" in plot_dic.keys():
-            if plot_dic["title"] != '' and plot_dic["title"] != None:
+            tdic = plot_dic["title"]
+            if len(tdic.keys()) > 0:
+                # ax.title.set_text(r'{}'.format(tdic["text"]), fontsize=tdic["fontsize"])
+                ax.set_title(r'{}'.format(tdic["text"]), fontsize=tdic["fontsize"])
 
-                title = plot_dic["title"]
-
-                # data = plot_dic['data']
-                #
-                # if plot_dic["title"] == 'it':
-                #     title = plot_dic["it"]
-                # elif plot_dic["title"] == 'time [s]' or \
-                #     plot_dic["title"] == 'time':
-                #     title = "%.3f" % data.get_time(plot_dic["it"]) + " [s]"
-                # elif plot_dic["title"] == 'time [ms]':
-                #     title = "%.1f" % (data.get_time(plot_dic["it"]) * 1000) + " [ms]"
-                # else:
-                #     title = plot_dic["title"]
-                ax.title.set_text(r'{}'.format(title))
+            # if plot_dic["title"] != '' and plot_dic["title"] != None:
+            #
+            #     title = plot_dic["title"]
+            #
+            #     # data = plot_dic['data']
+            #     #
+            #     # if plot_dic["title"] == 'it':
+            #     #     title = plot_dic["it"]
+            #     # elif plot_dic["title"] == 'time [s]' or \
+            #     #     plot_dic["title"] == 'time':
+            #     #     title = "%.3f" % data.get_time(plot_dic["it"]) + " [s]"
+            #     # elif plot_dic["title"] == 'time [ms]':
+            #     #     title = "%.1f" % (data.get_time(plot_dic["it"]) * 1000) + " [ms]"
+            #     # else:
+            #     #     title = plot_dic["title"]
+            #     ax.title.set_text(r'{}'.format(title))
 
     def set_min_max_scale(self, ax, dic):
         if dic["ptype"] == "cartesian":
@@ -71,17 +76,28 @@ class BASIC_PARTS():
     def set_xy_labels(self, ax, dic):
 
         if dic["ptype"] == "cartesian":
-            if "v_n_x" in dic.keys():
-                if "xlabel" in dic.keys():
-                    ax.set_xlabel(dic["xlabel"], fontsize=12)
-                else:
-                    ax.set_xlabel(dic["v_n_x"].replace('_', '\_'), fontsize=12)
 
-            if "v_n_y" in dic.keys():
-                if "ylabel" in dic.keys():
-                    ax.set_ylabel(dic["ylabel"], fontsize=12)
-                else:
-                    ax.set_ylabel(dic["v_n_y"].replace('_', '\_'), fontsize=12)
+            # if not 'fontsize' in dic.keys():
+            #     raise NameError("no 'fontsize' in dic: {}".format(dic))
+
+            if "xlabel" in dic.keys():
+                if dic["xlabel"] != None:
+                    ax.set_xlabel(dic["xlabel"], fontsize=dic['fontsize'])
+            elif "v_n_x" in dic.keys():
+                if dic["v_n_x"] != "None":
+                    ax.set_xlabel(dic["v_n_x"].replace('_', '\_'), fontsize=dic['fontsize'])
+            else:
+                print("Waning. Neither v_n_x nor xlabel are set in the dic")
+
+            if "ylabel" in dic.keys():
+                if dic["ylabel"] != None:
+                    ax.set_ylabel(dic["ylabel"], fontsize=dic['fontsize'])
+            elif "v_n_y" in dic.keys():
+                if dic["v_n_y"] != "None":
+                    ax.set_ylabel(dic["v_n_y"].replace('_', '\_'), fontsize=dic['fontsize'])
+            else:
+                print("Waning. Neither v_n_x nor xlabel are set in the dic")
+
 
 
         elif dic["ptype"] == "polar":
@@ -91,9 +107,15 @@ class BASIC_PARTS():
 
     def set_legend(self, ax, dic):
         if "legend" in dic.keys():
-            if dic["legend"]:
+            ldic = dic["legend"]
+            if len(ldic.keys()) > 0:
                 print("legend")
-                ax.legend(fancybox=False, loc='best', shadow=False, fontsize=8)
+                if 'bbox_to_anchor' in ldic.keys():
+                    ax.legend(fancybox=False, bbox_to_anchor=ldic['bbox_to_anchor'],#(1.0, 0.3),
+                          loc=ldic['loc'], shadow=False, ncol=ldic['ncol'], fontsize=ldic['fontsize'])
+                else:
+                    ax.legend(fancybox=False,
+                          loc=ldic['loc'], shadow=False, ncol=ldic['ncol'], fontsize=ldic['fontsize'])
 
     def remover_some_ticks(self, ax, dic):
 
@@ -107,6 +129,14 @@ class BASIC_PARTS():
                 ax.set_yticklabels([])
                 ax.axes.yaxis.set_ticklabels([])
 
+    def plot_text(self, ax, dic):
+
+        if 'text' in dic.keys() and dic['text'] != None:
+            coords = dic['text']['coords']
+            text = dic['text']['text']
+            color = dic['text']['color']
+            fs =    dic['text']['fs']
+            ax.text(coords[0], coords[1], text, color=color, fontsize=fs, transform=ax.transAxes)
 
     @staticmethod
     def plot_colormesh(ax, dic, x_arr, y_arr, z_arr):
@@ -149,19 +179,34 @@ class BASIC_PARTS():
         elif "mask_above" in dic.keys():
             z_arr = np.ma.masked_array(z_arr, z_arr > dic["mask_below"])
 
+        vmin = dic["vmin"]
+        vmax = dic["vmax"]
 
-        if dic["vmin"] == None: dic["vmin"] = z_arr.min()
-        if dic["vmax"] == None: dic["vmax"] = z_arr.max()
+        if vmin == None:
+            assert not np.isnan(z_arr.min())
+            assert not np.isinf(z_arr.min())
+            vmin = z_arr.min()
+            if dic["norm"] == "log":
+                vmin = z_arr.flatten()[np.where(z_arr > 0, z_arr, np.inf).argmin()]
+        if vmax == None:
+            assert not np.isnan(z_arr.max())
+            assert not np.isinf(z_arr.max())
+            vmax = z_arr.max()
+            if dic["norm"] == "log":
+                vmax = z_arr.flatten()[np.where(z_arr < 0, z_arr, -np.inf).argmax()]
 
         if dic["norm"] == "norm" or dic["norm"] == "linear" or dic["norm"] == None:
-            norm = Normalize(vmin=dic["vmin"], vmax=dic["vmax"])
+            norm = Normalize(vmin=vmin, vmax=vmax)
         elif dic["norm"] == "log":
-            norm = LogNorm(vmin=dic["vmin"], vmax=dic["vmax"])
+            assert vmin > 0
+            assert vmax > 0
+            norm = LogNorm(vmin=vmin, vmax=vmax)
         else:
             raise NameError("unrecognized norm: {} in task {}"
                             .format(dic["norm"], dic["v_n"]))
 
-
+        # print("vmin:{} vmax:{}".format(vmin, vmax))
+        # print("norm:{}".format(norm))
 
         im = ax.pcolormesh(x_arr, y_arr, z_arr, norm=norm, cmap=dic["cmap"])#, vmin=dic["vmin"], vmax=dic["vmax"])
         im.set_rasterized(True)
@@ -181,16 +226,65 @@ class BASIC_PARTS():
 
         if 'fancyticks' in dic.keys():
             if dic['fancyticks']:
-                ax.tick_params(axis='both', which='both', labelleft=True,
-                               labelright=False, tick1On=True, tick2On=True,
-                               labelsize=12, direction='in')
+                ax.tick_params(
+                    axis='both', which='both', labelleft=True,
+                    labelright=False, tick1On=True, tick2On=True,
+                    labelsize=int(dic['labelsize']),
+                    direction='in',
+                    bottom=True, top=True, left=True, right=True
+                )
+
 
         if 'minorticks' in dic.keys():
             if dic["minorticks"]:
                 ax.minorticks_on()
 
+        if dic['task'] == 'outflow corr':
+            if dic['v_n_x'] == 'theta':
+                xmajorticks = np.arange(5) * 90. / 4.
+                xminorticks = np.arange(17) * 90. / 16
+                xmajorlabels = [r"$0^\circ$", r"$22.5^\circ$", r"$45^\circ$",
+                                r"$67.5^\circ$", r"$90^\circ$"]
+                ax.xaxis.set_major_locator(FixedLocator(xmajorticks))
+                ax.xaxis.set_minor_locator(FixedLocator(xminorticks))
+                ax.set_xticklabels(xmajorlabels)
+            if dic['v_n_y'] == 'theta':
+                ymajorticks = np.arange(5) * 90. / 4.
+                yminorticks = np.arange(17) * 90. / 16
+                ymajorlabels = [r"$0^\circ$", r"$22.5^\circ$", r"$45^\circ$",
+                                r"$67.5^\circ$", r"$90^\circ$"]
+                ax.yaxis.set_major_locator(FixedLocator(ymajorticks))
+                ax.yaxis.set_minor_locator(FixedLocator(yminorticks))
+                ax.set_yticklabels(ymajorlabels)
+
+            if dic['v_n_x'] == 'vel_inf' or dic['v_n_x'] == 'vel_inf_bern':
+                if 'sharey' in dic.keys() and dic['sharey']:
+                    ax.set_xticks(np.arange(dic['xmin'], dic['xmax'], .1))
+                else:
+                    ax.set_xticks(np.arange(dic['xmin'], dic['xmax'], .1))
+
+            if dic['v_n_y'] == 'vel_inf' or dic['v_n_y'] == 'vel_inf_bern':
+                if 'sharex' in dic.keys() and dic['sharex']:
+                    ax.set_yticks(np.arange(0, 1.0, .2))
+                else:
+                    ax.set_yticks(np.arange(0, 1.0, .2))
+
+            if dic['v_n_x'] == 'ye':
+                if 'sharey' in dic.keys() and dic['sharey']:
+                    ax.set_xticks(np.arange(0.1, 0.5, .1))
+                else:
+                    ax.xaxis.set_major_locator(MultipleLocator(0.1))
+                    ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+
+            if dic['v_n_y'] == 'ye':
+                if 'sharex' in dic.keys() and dic['sharex']:
+                    ax.set_yticks(np.arange(0.1, 0.5, .1))
+                else:
+                    ax.yaxis.set_major_locator(MultipleLocator(0.1))
+                    ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+
         if 'v_n_x' in dic.keys() and 'v_n_y' in dic.keys():
-            if dic['v_n_x'] == 'hist_theta' and dic['v_n_y'] == 'hist_theta_m':
+            if (dic['v_n_x'] == 'hist_theta' and dic['v_n_y'] == 'hist_theta_m'):
                 xmajorticks = np.arange(5) * 90. / 4.
                 xminorticks = np.arange(17) * 90. / 16
                 xmajorlabels = [r"$0^\circ$", r"$22.5^\circ$", r"$45^\circ$",
@@ -229,6 +323,15 @@ class BASIC_PARTS():
                 ax.set_xlabel('')
                 ax.tick_params(labelbottom=False)
 
+        if 'centerx' in dic.keys():
+            if dic['centerx']:
+                ax.spines['bottom'].set_position('center')
+                ax.xaxis.set_ticks_position('bottom')
+
+        if 'centery' in dic.keys():
+            if dic['centery']:
+                ax.spines['left'].set_position('center')
+                ax.spines['right'].set_color('none')
         # if 'invert_x' in dic.keys():
         #     if dic['invert_x']:
         #         ax.axes.invert_xaxis()
@@ -257,61 +360,49 @@ class BASIC_PARTS():
 
         return 0
 
+    def plot_generic_horisontal_line(self, ax, dic):
+
+        value = dic['value']
+
+        if 'label' in dic.keys():
+            if dic['label'] == None:
+                ax.axhline(y=value, linestyle=dic['ls'], color=dic['color'], linewidth=dic['lw'])
+            else:
+                # exit(1)
+                ax.axhline(y=value, linestyle=dic['ls'], color=dic['color'], linewidth=dic['lw'], label=dic['label'])
+        else:
+            ax.axhline(y=value, linestyle=dic['ls'], color=dic['color'], linewidth=dic['lw'])
+
+        return 0
+
     def plot_generic_line(self, ax, dic, x_arr, y_arr):
 
-
-        if 'alpha' in dic.keys():
-            if 'marker' in dic.keys():
-                if 'label' in dic.keys():
-                    print("alpha marker label")
-                    ax.plot(x_arr, y_arr, dic['marker'],  color=dic['color'], markersize=dic['ms'], alpha=dic['alpha'], label=dic['label'])
-                else:
-                    print("alpha marker")
-                    ax.plot(x_arr, y_arr, dic['marker'], color=dic['color'], markersize=dic['ms'], alpha=dic['alpha'])
-
-            elif 'ls' in dic.keys():
-                if 'ds' in dic.keys():
-                    if 'label' in dic.keys():
-                        print("alpha ls ds label")
-                        ax.plot(x_arr, y_arr, ls=dic['ls'], color=dic['color'],  drawstyle=dic['ds'], alpha=dic['alpha'], label=dic['label'])
-                    else:
-                        print("alpha ls ds")
-                        ax.plot(x_arr, y_arr, ls=dic['ls'], color=dic['color'], drawstyle=dic['ds'], alpha=dic['alpha'])
-                else:
-                    if 'label' in dic.keys():
-                        print("alpha ls label")
-                        ax.plot(x_arr, y_arr, ls=dic['ls'], color=dic['color'], alpha=dic['alpha'], label=dic['label'])
-                        print("ls")
-                    else:
-                        ax.plot(x_arr, y_arr, ls=dic['ls'], color=dic['color'], alpha=dic['alpha'])
+        # color, lw, alpha, label,
+        if 'marker' in dic.keys():
+            if 'label' in dic.keys():
+                ax.plot(x_arr, y_arr, dic['marker'],  color=dic['color'], markersize=dic['ms'], alpha=dic['alpha'], label=dic['label'])
             else:
-                raise NameError("what am I: marker or a line?")
+                ax.plot(x_arr, y_arr, dic['marker'],  color=dic['color'], markersize=dic['ms'], alpha=dic['alpha'])
+
+        elif 'ls' in dic.keys():
+            if 'label' in dic.keys():
+                ax.plot(x_arr, y_arr, ls=dic['ls'], lw=dic['lw'], color=dic['color'],  drawstyle=dic['ds'], alpha=dic['alpha'], label=dic['label'])
+            else:
+                ax.plot(x_arr, y_arr, ls=dic['ls'], lw=dic['lw'], color=dic['color'],  drawstyle=dic['ds'], alpha=dic['alpha'])
+
         else:
-            if 'marker' in dic.keys():
-                if 'label' in dic.keys():
-                    print("marker label")
-                    ax.plot(x_arr, y_arr, dic['marker'], color=dic['color'], markersize=dic['ms'], label=dic['label'])
-                    print("marker")
-                else:
-                    ax.plot(x_arr, y_arr, dic['marker'], color=dic['color'], markersize=dic['ms'])
+            raise NameError("Use 'ls' or 'marker' to plot")
 
-            elif 'ls' in dic.keys():
-                if 'ds' in dic.keys():
-                    if 'label' in dic.keys():
-                        print("ls ds label")
-                        ax.plot(x_arr, y_arr, ls=dic['ls'], color=dic['color'], drawstyle=dic['ds'], label=dic['label'])
-                    else:
-                        print("ls ds")
-                        ax.plot(x_arr, y_arr, ls=dic['ls'], color=dic['color'], drawstyle=dic['ds'])
-                else:
-                    if 'label' in dic.keys():
-                        print("ls label")
-                        ax.plot(x_arr, y_arr, ls=dic['ls'], color=dic['color'], label=dic['label'])
-                    else:
-                        print("ls")
-                        ax.plot(x_arr, y_arr, ls=dic['ls'], color=dic['color'])
-            else:
-                raise NameError("what am I: marker or a line?")
+        if 'mark_beginning' in dic.keys():
+            if dic['mark_beginning']:
+                dic_mark = dic['mark_beginning']
+                self.plot_generic_line(ax, dic_mark, x_arr[0], y_arr[0])
+        if 'mark_end' in dic.keys():
+            if dic['mark_end']:
+                dic_mark = dic['mark_end']
+                self.plot_generic_line(ax, dic_mark, x_arr[-1], y_arr[-1])
+
+        return 0
 
     def plot_generic_errorbar(self, ax, dic, x_arr, y_arr, yerr):
 
@@ -361,6 +452,10 @@ class BASIC_PARTS():
             # print("tmerger: {}".format(dic['-t']))
             x_arr = x_arr - float(dic['-t'])
 
+        if '+t' in dic.keys():
+            # print("tmerger: {}".format(dic['-t']))
+            x_arr = x_arr + float(dic['+t'])
+
         # print("x[0]-tmrg:{}".format(x_arr[0]))
         if 'xunits' in dic.keys():
             if dic['xunits'] == 's':
@@ -378,6 +473,17 @@ class BASIC_PARTS():
             if dic['yunits'] == '1e-2Msun':
                 return y_arr * 1e2
 
+    def modify_arr(self, arr, dic):
+
+        if 'ymod' in dic.keys() and dic['ymod'] != None:
+            string = dic['ymod']
+            if string[0] == '*':
+                # multiply
+                value = float(string.split(' ')[-1])
+                arr = arr * value
+                return arr
+
+
 class PLOT_TASK(BASIC_PARTS):
 
     def __init__(self):
@@ -388,7 +494,14 @@ class PLOT_TASK(BASIC_PARTS):
         if dic['dtype'] == "corr":
 
             o_data = dic["data"]
-            table = o_data.get_res_corr(dic["it"], dic["v_n_x"], dic["v_n_y"])
+            if 'it' in dic.keys():
+                table = o_data.get_res_corr(dic["it"], dic["v_n_x"], dic["v_n_y"])
+            elif 'time' in dic.keys():
+                t = self.treat_time_acis(dic['time'], dic)
+                it = o_data.get_it(t)
+                table = o_data.get_res_corr(it, dic["v_n_x"], dic["v_n_y"])
+            else:
+                raise NameError("set it or time for data to be loaded")
             table = np.array(table)
             x_arr = np.array(table[0, 1:])  # * 6.176269145886162e+17
             y_arr = np.array(table[1:, 0])
@@ -399,9 +512,44 @@ class PLOT_TASK(BASIC_PARTS):
 
             im = self.plot_colormesh(ax, dic, x_arr, y_arr, z_arr)
 
+        elif dic['dtype'] == "int":
+
+            o_data = dic["data"]
+
+            data = np.array(o_data.get_int(dic["it"], dic["plane"], dic["v_n"]))
+            phi = np.array(o_data.get_new_grid(dic["plane"], dic["v_n_x"]))
+            r = np.array(o_data.get_new_grid(dic["plane"], dic["v_n_y"]))
+
+            # print(data)
+            print("min:{} max:{}".format(data.min(), data.max()))
+            # data = np.maximum(data, 9e-15)
+            data[np.isnan(data)] = 1e-16
+
+
+            im = self.plot_colormesh(ax, dic, phi, r, data)
+
+
         else:
             raise NameError("plot type dic['dtype'] is not recognised (given: {})".format(dic["dtype"]))
 
+        return im
+
+    def plot_2d_mkn(self, ax, dic):
+
+
+        data = dic['data']
+
+        tarr, atrarr, magarr = data.get_table(band=dic['band'], files_name_gen=dic['files'])
+
+
+
+
+        # print("tarr: {}".format(tarr))
+        print("atr:  {}".format(atrarr))
+        # print("mags: {}".format(magarr))
+
+
+        im = self.plot_colormesh(ax, dic, tarr, magarr, atrarr * 1e2)
         return im
 
     def plot_2d_projection(self, ax, dic):
@@ -423,9 +571,18 @@ class PLOT_TASK(BASIC_PARTS):
 
             o_data = dic["data"]
 
-            x_arr, y_arr, z_arr = o_data.get_modified_2d_data(
-                dic["it"], dic["v_n_x"], dic["v_n_y"], dic["v_n"], dic["mod"]
-            )
+            if 'it' in dic.keys():
+                x_arr, y_arr, z_arr = o_data.get_modified_2d_data(
+                    dic["it"], dic["v_n_x"], dic["v_n_y"], dic["v_n"], dic["mod"]
+                )
+            elif 'time' in dic.keys():
+                t = self.treat_time_acis(dic['time'], dic)
+                it = o_data.get_it(t)
+                x_arr, y_arr, z_arr = o_data.get_modified_2d_data(
+                    it, dic["v_n_x"], dic["v_n_y"], dic["v_n"], dic["mod"]
+                )
+            else:
+                raise NameError("specify it or time to load data")
             #
             #
             # y_arr = o_data.get_grid_data(dic["it"], dic["v_n_x"])  # phi
@@ -636,15 +793,24 @@ class PLOT_TASK(BASIC_PARTS):
 
         o_data = dic['data']
 
-        x_arr = o_data.get_arr(dic['v_n_x'], dic['criterion'])
-        y_arr = o_data.get_arr(dic['v_n_y'], dic['criterion'])
+        if 'extrapolation' in dic.keys():
+            dic_ext = dic['extrapolation']
+            x_arr, y_arr = o_data.get_extrapolated_arr(dic['v_n_x'], dic['v_n_y'], dic['criterion'],
+                                                       dic_ext['method'], dic_ext['depth'],
+                                                       dic_ext['x_left'], dic_ext['x_right'],
+                                                       dic_ext['x_start'], dic_ext['x_stop'])
+
+            # print(y_arr)
+        else:
+            x_arr = o_data.get_arr(dic['v_n_x'], dic['criterion'])
+            y_arr = o_data.get_arr(dic['v_n_y'], dic['criterion'])
+
+
+        if 'ymod' in dic.keys() and dic['ymod'] != None:
+            y_arr = self.modify_arr(y_arr, dic)
 
         x_arr = self.treat_time_acis(x_arr, dic)
         y_arr = self.treat_mass_acis(y_arr, dic)
-
-        # if 'xunits' in dic.keys():
-        #     if dic['xunits'] == 'ms':
-        #         x_arr *= 1e3
 
         self.plot_generic_line(ax, dic, x_arr, y_arr)
 
@@ -673,7 +839,7 @@ class PLOT_TASK(BASIC_PARTS):
         self.plot_generic_line(ax, dic, x_arr, y_arr)
 
     def plot_mkn_lightcurve(self, ax, dic):
-
+        print("color {}".format(dic['color']))
         data = dic['data']
         m_time, m_min, m_max = data.get_model_min_max(dic['band'], fname=dic['fname'])
         if dic["label"] == None:
@@ -695,6 +861,21 @@ class PLOT_TASK(BASIC_PARTS):
                 else:
                     dic['label'] = None
                     self.plot_generic_errorbar(ax, dic, arr[:, 0], arr[:, 1], yerr=arr[:, 2])
+
+    def plot_mkn_mismatch(self, ax, dic):
+
+        data = dic['data']
+        times, min_mismatch, max_mismatch = data.get_mismatch(dic['band'], dic['fname'])
+
+        self.plot_generic_line(ax, dic, times, min_mismatch)
+
+    def plot_mkn_model_middle_line(self, ax, dic):
+
+        data = dic['data']
+
+        times, mags = data.get_model_median(dic['band'], dic['fname'])
+
+        self.plot_generic_line(ax, dic, times, mags)
 
     def plot_ejecta_band_2_objects(self, ax, dic):
 
@@ -733,16 +914,162 @@ class PLOT_TASK(BASIC_PARTS):
         return 0
 
 
+    def plot_summed_correlation_with_time(self, ax, dic):
+
+        data = dic['data']
+        times = []
+        total_masses = []
+        for it in data.list_iterations:
+            try:
+                table = data.get_res_corr(int(it), dic['v_n_x'], dic['v_n_y'])
+                time_ = data.get_time(int(it))
+                table = np.array(table)
+                x_arr = table[0, 1:]  # * 6.176269145886162e+17
+                y_arr = table[1:, 0]
+                z_arr = table[1:, 1:]
+                total_mass = np.sum(z_arr)
+                times.append(time_)
+                total_masses.append(total_mass)
+            except IOError:
+                print("Warning: data for it:{} not found".format(it))
+
+        times, total_masses = zip(*sorted(zip(times, total_masses)))
+        # times, total_masses = x_y_z_sort(times, total_masses)
+
+        total_masses = self.treat_mass_acis(np.array(total_masses), dic)
+        times = self.treat_time_acis(np.array(times), dic)
+
+        # self.plot_generic_band(ax, dic, times, total_masses)
+
+        self.plot_generic_line(ax, dic, times, total_masses)
+
+    def plot_summed_correlation_with_time_band(self, ax, dic):
+
+        data1 = dic['data1']
+        data2 = dic['data2']
+        times = []
+        total_masses1 = []
+        total_masses2 = []
+        for it in data1.list_iterations:
+            try:
+                table1 = data1.get_res_corr(int(it), dic['v_n_x1'], dic['v_n_y1'])
+                time_ = data1.get_time(int(it))
+                table1 = np.array(table1)
+                x_arr1 = table1[0, 1:]  # * 6.176269145886162e+17
+                y_arr1 = table1[1:, 0]
+                z_arr1 = table1[1:, 1:]
+                total_mass1 = np.sum(z_arr1)
+                times.append(time_)
+                total_masses1.append(total_mass1)
+
+                table2 = data2.get_res_corr(int(it), dic['v_n_x2'], dic['v_n_y2'])
+                # time_ = data2.get_time(int(it))
+                table2 = np.array(table2)
+                x_arr2 = table2[0, 1:]  # * 6.176269145886162e+17
+                y_arr2 = table2[1:, 0]
+                z_arr2 = table2[1:, 1:]
+                total_mass2 = np.sum(z_arr2)
+                # times.append(time_)
+                total_masses2.append(total_mass2)
+
+            except IOError:
+                print("Warning: data for it:{} not found".format(it))
+
+        times, total_masses1 = zip(*sorted(zip(times, total_masses1)))
+        times, total_masses2 = zip(*sorted(zip(times, total_masses2)))
+        # times, total_masses = x_y_z_sort(times, total_masses)
+
+        total_masses1 = self.treat_mass_acis(np.array(total_masses1), dic)
+        total_masses2 = self.treat_mass_acis(np.array(total_masses2), dic)
+        times = self.treat_time_acis(np.array(times), dic)
+
+        self.plot_generic_band(ax, dic, times, total_masses1, total_masses2)
+
+
+    def plot_outflowed_correlation(self, ax, dic):
+
+        data = dic['data']
+
+        x_arr, y_arr, mass = data.get_corr_x_y_mass(dic['v_n_x'], dic['v_n_y'], dic['criterion'])
+
+
+        if dic['v_n_x'] == 'theta':
+            # ax.set_xlim(0, 90)
+            x_arr = 90 - (180 * x_arr / np.pi)
+        if dic['v_n_y'] == 'theta':
+            # ax.set_ylim(0, 90)
+            y_arr = 90 - (180 * y_arr / np.pi)
+
+        if 'normalize' in dic.keys() and dic['normalize']:
+            mass = mass / np.sum(mass)
+            mass = np.maximum(mass, 1e-15)  # WHAT'S THAT?
+
+        return self.plot_colormesh(ax, dic, x_arr, y_arr, mass)
+
+
+    def plot_2d_movie_plot_xy(self, ax, dic):
+
+        o_data = dic["data"]
+        x_arr, y_arr, z_arr = o_data.get_modified_2d_data(
+            dic["it"], dic['plane'], dic["v_n_x"], dic["v_n_y"], dic["v_n"], dic["mod"]
+        )
+
+        im = self.plot_colormesh(ax, dic, y_arr, x_arr, z_arr)  # phi, r, data
+        return im
+
+    def plot_2d_movie_plot_xz(self, ax, dic):
+
+        o_data = dic["data"]
+        phi_arr = o_data.get_int_grid(dic['plane'], dic["v_n_x"])
+        z_arr = o_data.get_int_grid(dic['plane'], dic["v_n_y"])
+        data_arr = o_data.get_int_data(dic["it"], dic['plane'], dic["v_n"])
+
+        phi_arr = (phi_arr[:, 0] * 180 / np.pi) - 180
+        z_arr = z_arr[0, :]
+
+        print(data_arr)
+
+        # print(phi_arr)
+        #
+        print(z_arr)
+        #
+        # print(data_arr.shape)
+
+
+        im = self.plot_colormesh(ax, dic, phi_arr, z_arr, data_arr.T)  # phi, r, data
+        return im
+
+    def plot_d2_slice_from_d2_data_rl(self, ax, dic):
+
+        data = dic['data']
+        data_arr = data.get_data_rl(dic['it'], dic['plane'], dic['rl'], dic['v_n'])
+        x_arr = data.get_grid_v_n_rl(dic['it'], dic['plane'], dic['rl'], "x")
+        if dic['plane'] == 'xy':
+            yz_arr = data.get_grid_v_n_rl(dic['it'], dic['plane'], dic['rl'], "y")
+        elif dic['plane'] == 'xz':
+            yz_arr = data.get_grid_v_n_rl(dic['it'], dic['plane'], dic['rl'], "z")
+        else:
+            raise NameError("unrecognized plane:{}".format(dic['plane']))
+
+        im = self.plot_colormesh(ax, dic, x_arr, yz_arr, data_arr)  # phi, r, data
+        return im
+
     def plot_task(self, ax, dic):
 
         if dic["task"] == '2d projection':
             return self.plot_2d_projection(ax, dic)
         elif dic["task"] == '2d colormesh':
             return self.plot_2d_generic_colormesh(ax, dic)
+        elif dic["task"] == 'mkn 2d':
+            return self.plot_2d_mkn(ax, dic)
         elif dic["task"] == 'line':
             return self.plot_density_mode_line(ax, dic)
+        elif dic['task'] == 'marker':
+            return self.plot_generic_line(ax, dic, np.array(dic['x']), np.array(dic['y']))
         elif dic['task'] == 'vertline':
             return self.plot_generic_vertical_line(ax, dic)
+        elif dic['task'] == 'horline':
+            return self.plot_generic_horisontal_line(ax, dic)
         elif dic['task'] == 'hist1d':
             return self.plot_histogram_1d(ax, dic)
         elif dic['task'] == 'ejprof':
@@ -755,6 +1082,26 @@ class PLOT_TASK(BASIC_PARTS):
             return self.plot_mkn_lightcurve(ax, dic)
         elif dic['task'] == 'mkn obs':
             return self.plot_mkn_obs_data(ax, dic)
+        elif dic['task'] == 'mkn mismatch':
+            return self.plot_mkn_mismatch(ax, dic)
+        elif dic['task'] == 'mkn median':
+            return self.plot_mkn_model_middle_line(ax, dic)
+        elif dic['task'] == 'corr_sum':
+            return self.plot_summed_correlation_with_time(ax, dic)
+        elif dic['task'] == 'corr_sum_band':
+            return self.plot_summed_correlation_with_time_band(ax, dic)
+        elif dic['task'] == 'outflow corr':
+            return self.plot_outflowed_correlation(ax, dic)
+
+        elif dic['task'] == '2d movie xy':
+            return self.plot_2d_movie_plot_xy(ax, dic)
+
+        elif dic['task'] == '2d movie xz':
+            return self.plot_2d_movie_plot_xz(ax, dic)
+
+        elif dic['task'] == 'slice':
+            return self.plot_d2_slice_from_d2_data_rl(ax, dic)
+
         else:
             raise NameError("dic['task'] is not recognized ({})".format(dic["task"]))
 
@@ -787,8 +1134,8 @@ class PLOT_MANY_TASKS(PLOT_TASK):
         tmp_cols = []
 
         for dic in self.set_plot_dics:
-            tmp_cols.append(dic['position'][1])
-            tmp_rows.append(dic['position'][0])
+            tmp_cols.append(int(dic['position'][1]))
+            tmp_rows.append(int(dic['position'][0]))
 
         max_row = max(tmp_rows)
         max_col = max(tmp_cols)
@@ -799,7 +1146,8 @@ class PLOT_MANY_TASKS(PLOT_TASK):
 
         for col in range(1, max_col):
             if not col in tmp_cols:
-                raise NameError("Please set horizontal plot position in a subsequent order: 1,2,3... not 1,3...")
+                raise NameError("Please set horizontal plot position in a subsequent order: 1,2,3... not 1,3..."
+                                "col:{} tmp_cols:{}".format(col, tmp_cols))
 
         print("\tSet {} rows {} columns (total {}) of plots".format(max_row, max_col, len(self.set_plot_dics)))
 
@@ -933,6 +1281,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                             self.set_xy_labels(ax, dic)
                             self.set_legend(ax, dic)
                             self.remover_some_ticks(ax, dic)
+                            self.plot_text(ax, dic)
                             self.add_fancy_to_ax(ax, dic)
 
 
@@ -974,14 +1323,17 @@ class PLOT_MANY_TASKS(PLOT_TASK):
         if n_row != self.n_rows-1:
             ax.set_xlabel('')
 
-    def plot_one_cbar(self, im, dic, n_row, n_col):
+    def plot_one_cbar(self, im, idic, n_row, n_col):
 
-        if "cbar" in dic.keys():
-            if dic["cbar"] != None and dic["cbar"] != '':
+        if "cbar" in idic.keys():
+            cdic = idic["cbar"]
+            if not isinstance(cdic, dict):
+                raise NameError("'cbar' must be dic")
+            if len(cdic.keys()) > 0 :
 
-                location = dic["cbar"].split(' ')[0]
-                shift_h = float(dic["cbar"].split(' ')[1])
-                shift_w = float(dic["cbar"].split(' ')[2])
+                location = cdic["location"].split(' ')[0]
+                shift_h = float(cdic["location"].split(' ')[1])
+                shift_w = float(cdic["location"].split(' ')[2])
                 cbar_width = 0.02
 
 
@@ -1012,13 +1364,13 @@ class PLOT_MANY_TASKS(PLOT_TASK):
 
                 cax1 = self.fig.add_axes(pos2)
                 if location == 'right':
-                    if 'cbar fmt' in dic.keys() and dic['cbar fmt'] != None:
-                        cbar = plt.colorbar(im, cax=cax1, extend='both', format=dic['cbar fmt'])
+                    if 'fmt' in cdic.keys() and cdic['fmt'] != None:
+                        cbar = plt.colorbar(im, cax=cax1, extend='both', format=cdic['fmt'])
                     else:
                         cbar = plt.colorbar(im, cax=cax1, extend='both')  # , format='%.1e')
                 elif location == 'left':
-                    if 'cbar fmt' in dic.keys() and dic['cbar fmt'] != None:
-                        cbar = plt.colorbar(im, cax=cax1, extend='both', format=dic['cbar fmt'])#, format='%.1e')
+                    if 'fmt' in cdic.keys() and cdic['fmt'] != None:
+                        cbar = plt.colorbar(im, cax=cax1, extend='both', format=cdic['fmt'])#, format='%.1e')
                     else:
                         cbar = plt.colorbar(im, cax=cax1, extend='both')
                     cax1.yaxis.set_ticks_position('left')
@@ -1026,11 +1378,13 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                 else:
                     raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
                                     .format(location))
-                if 'cbar label' in dic.keys() and dic['cbar label'] != None:
-                    cbar.ax.set_title(dic['cbar label'])
+                if 'label' in cdic.keys() and cdic['label'] != None:
+                    cbar.ax.set_title(cdic['label'], fontsize=cdic["fontsize"])
 
                 else:
-                    cbar.ax.set_title(r"{}".format(str(dic["v_n"]).replace('_', '\_')))
+                    cbar.ax.set_title(r"{}".format(str(cdic["v_n"]).replace('_', '\_')), fontsize=cdic["fontsize"])
+
+                cbar.ax.tick_params(labelsize=cdic["labelsize"])
 
     def plot_colobars(self):
 
@@ -1092,3 +1446,6 @@ class PLOT_MANY_TASKS(PLOT_TASK):
 
         # saving the result
         self.save_plot()
+
+        print("\tPlotted:\n\t{}".format(self.gen_set["figdir"] + self.gen_set["figname"]))
+

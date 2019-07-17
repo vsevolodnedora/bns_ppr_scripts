@@ -72,6 +72,13 @@ class LOAD_FILES:
                            "ejecta_profile_bern.dat",
                            ]
 
+        self.list_of_outflowed_h5_files = [
+            "corr_vel_inf_bern_theta.h5",
+            "corr_vel_inf_theta.h5",
+            "corr_ye_entropy.h5",
+            "corr_ye_theta.h5"
+        ]
+
         self.list_collated_files = [
             "dens_unbnd.norm1.asc",
             "dens_unbnd_bernoulli.norm1.asc",
@@ -94,6 +101,7 @@ class LOAD_FILES:
         ]
 
         self.list_files = self.list_outflowed_files + \
+                          self.list_of_outflowed_h5_files + \
                           self.list_collated_files + \
                           self.list_gw_files + \
                           self.list_3d_data_files + \
@@ -180,12 +188,47 @@ class LOAD_FILES:
 
         return np.vstack((final_times, final_masses)).T
 
+    def load_corr_file(self, criterion, fname):
+
+        dfile = h5py.File(Paths.ppr_sims + self.sim + '/' + self.gen_set['outflow'] + criterion + '/' + fname, "r")
+
+        v_ns = []
+        for v_n in dfile:
+            if not fname.__contains__(v_n) and v_n != 'mass':
+                raise NameError("loaded correlation file: {} does not contain v_n: {}"
+                                .format(fname, v_n))
+            v_ns.append(v_n)
+        if len(v_ns) != 3:
+            raise NameError("N of arrays in correlation file: {} not equal 3. ({})"
+                            .format(fname, v_ns))
+
+        # if v_ns[-1] != 'mass':
+        #     raise NameError("last v_n in correlation file: {} is not 'mass' as expected but {}"
+        #                     .format(fname, v_ns[-1]))
+
+        v_ns.remove('mass')
+        # print(v_ns); exit(1)
+
+        mass =  np.array(dfile['mass']).T
+        edge_x = np.array(dfile[v_ns[1]])
+        edge_y = np.array(dfile[v_ns[0]])
+        arr_x = 0.5 * (edge_x[1:] + edge_x[:-1])  # from edges to center of bins
+        arr_y = 0.5 * (edge_y[1:] + edge_y[:-1])
+
+        print(mass.shape)
+
+        return combine(arr_x, arr_y, mass)
+
+
+
+
     def load_file(self, criterion, fname):
 
+        fpath = ''
         if criterion == '' and fname in self.list_3d_data_files:
-            fpath = ''
             self.in_data_matrix[self.i_cr(criterion)][self.i_fn(fname)] = self.load_disk_mass_ev()
-
+        elif criterion != '' and fname in self.list_of_outflowed_h5_files:
+            self.in_data_matrix[self.i_cr(criterion)][self.i_fn(fname)] = self.load_corr_file(criterion, fname)
         elif criterion == '' and fname in self.list_collated_files:
             fpath = Paths.ppr_sims + self.sim + '/' + self.gen_set['collated'] + '/' + fname
 
@@ -194,7 +237,6 @@ class LOAD_FILES:
 
         elif criterion != '' and fname in self.list_outflowed_files:
             fpath = Paths.ppr_sims + self.sim + '/' + self.gen_set['outflow'] + criterion + '/' + fname
-
         else:
             raise NameError("criterion:{} and fname:{} are not interconnected"
                             .format(criterion, fname))
@@ -222,9 +264,9 @@ class COMPUTE_STORE_ARR(LOAD_FILES):
         LOAD_FILES.__init__(self, sim)
 
         self.list_array_names = ['t_total_mass', 'total_mass',
-                                't_unb_mass', 'unb_mass',
-                                't_unb_mass_bern', 'unb_mass_bern',
-                                't_tot_flux', 'tot_flux', 'mass_tot_flux',
+                                 't_unb_mass', 'unb_mass',
+                                 't_unb_mass_bern', 'unb_mass_bern',
+                                 't_tot_flux', 'tot_flux', 'mass_tot_flux',
                                  't_disk_mass', 'disk_mass',
 
                                  'hist_ye', 'hist_ye_m',
@@ -234,7 +276,8 @@ class COMPUTE_STORE_ARR(LOAD_FILES):
                                  'hist_vel_inf', 'hist_vel_inf_m',
                                  'hist_theta', 'hist_theta_m',
                                  'hist_entropy, hist_entropy_m',
-                                 'hist_vel_inf_bern', 'hist_vel_inf_bern_m']
+                                 'hist_vel_inf_bern', 'hist_vel_inf_bern_m',
+                                 ]
 
         self.array_matrix = [[np.zeros(0, )
                                 for x in range(len(self.list_array_names))]
@@ -333,6 +376,24 @@ class COMPUTE_STORE_ARR(LOAD_FILES):
         self.is_array_computed(v_n, criterion)
 
         return self.array_matrix[self.i_cr(criterion)][self.i_arr(v_n)]
+
+    def get_corr_x_y_mass(self, v_n_x, v_n_y, criterion=''):
+
+        fpath_direct =  "corr_" + v_n_x + '_' + v_n_y + ".h5"
+        fpath_inverse = "corr_" + v_n_y + '_' + v_n_x + ".h5"
+
+        if fpath_direct in self.list_of_outflowed_h5_files:
+            table = self.get_file(fpath_direct, criterion)
+        elif fpath_inverse in self.list_of_outflowed_h5_files:
+            table = self.get_file(fpath_inverse, criterion)
+        else:
+            raise NameError("Neither {} nor {} are in list_ourflowed_corr_files. "
+                            .format(fpath_direct, fpath_inverse))
+
+        if fpath_direct in self.list_of_outflowed_h5_files:
+            return np.array(table[0, 1:]), np.array(table[1:, 0]), np.array(table[1:, 1:])
+        else:
+            return np.array(table[1:, 0]), np.array(table[0, 1:]), np.array(table[1:, 1:]).T
 
 
 class COMPUTE_STORE_PAR(COMPUTE_STORE_ARR):
@@ -480,6 +541,297 @@ class COMPUTE_STORE_PAR(COMPUTE_STORE_ARR):
         self.is_parameter_computed(v_n, criterion)
 
         return self.parameter_matrix[self.i_cr(criterion)][self.i_par(v_n)]
+
+class ADD_METHODS_1D(COMPUTE_STORE_PAR):
+
+    def __init__(self, sim):
+
+        COMPUTE_STORE_PAR.__init__(self, sim)
+
+    @staticmethod
+    def fit_polynomial(x, y, new_x, order = 1):
+        '''
+        RETURNS new_x, f(new_x)
+        :param x:
+        :param y:
+        :param order: 1-4 are supported
+        :return:
+        '''
+        f = None
+        lbl = None
+
+        assert len(x) > 0
+        assert len(y) > 0
+        assert len(x) == len(y)
+
+        if order == 1:
+            fit = np.polyfit(x, y, order)  # fit = set of coeddicients (highest first)
+            f = np.poly1d(fit)
+            lbl = '({}) + ({}*x)'.format(
+                "%.3f" % f.coefficients[1],
+                "%.3f" % f.coefficients[0]
+            )
+            # fit_x_coord = np.mgrid[(x.min()):(x.max()):depth*1j]
+            # plt.plot(fit_x_coord, f(fit_x_coord), '--', color='black')
+
+        if order == 2:
+            fit = np.polyfit(x, y, order)  # fit = set of coeddicients (highest first)
+            f = np.poly1d(fit)
+            lbl = '({}) + ({}*x) + ({}*x**2)'.format(
+                "%.3f" % f.coefficients[2],
+                "%.3f" % f.coefficients[1],
+                "%.3f" % f.coefficients[0]
+            )
+            # fit_x_coord = np.mgrid[(x.min()):(x.max()):depth*1j]
+            # plt.plot(fit_x_coord, f(fit_x_coord), '--', color='black')
+        if order == 3:
+            fit = np.polyfit(x, y, order)  # fit = set of coeddicients (highest first)
+            f = np.poly1d(fit)
+            lbl = '({}) + ({}*x) + ({}*x**2) + ({}*x**3)'.format(
+                "%.3f" % f.coefficients[3],
+                "%.3f" % f.coefficients[2],
+                "%.3f" % f.coefficients[1],
+                "%.3f" % f.coefficients[0]
+            )
+            # fit_x_coord = np.mgrid[(x.min()):(x.max()):depth*1j]
+            # plt.plot(fit_x_coord, f(fit_x_coord), '--', color='black')
+        if order == 4:
+            fit = np.polyfit(x, y, order)  # fit = set of coeddicients (highest first)
+            f = np.poly1d(fit)
+            lbl = '({}) + ({}*x) + ({}*x**2) + ({}*x**3) + ({}*x**4)'.format(
+                "%.3f" % f.coefficients[4],
+                "%.3f" % f.coefficients[3],
+                "%.3f" % f.coefficients[2],
+                "%.3f" % f.coefficients[1],
+                "%.3f" % f.coefficients[0]
+            )
+            # fit_x_coord = np.mgrid[(x.min()):(x.max()):depth*1j]
+            # plt.plot(fit_x_coord, f(fit_x_coord), '--', color='black')
+
+        if order == 5:
+            fit = np.polyfit(x, y, order)  # fit = set of coeddicients (highest first)
+            f = np.poly1d(fit)
+            lbl = '({}) + ({}*x) + ({}*x**2) + ({}*x**3) + ({}*x**4) + ({}*x**5)'.format(
+                "%.3f" % f.coefficients[5],
+                "%.3f" % f.coefficients[4],
+                "%.3f" % f.coefficients[3],
+                "%.3f" % f.coefficients[2],
+                "%.3f" % f.coefficients[1],
+                "%.3f" % f.coefficients[0]
+            )
+            # fit_x_coord = np.mgrid[(x.min()):(x.max()):depth*1j]
+            # plt.plot(fit_x_coord, f(fit_x_coord), '--', color='black')
+
+        if order == 6:
+            fit = np.polyfit(x, y, order)  # fit = set of coeddicients (highest first)
+            f = np.poly1d(fit)
+            lbl = '({}) + ({}*x) + ({}*x**2) + ({}*x**3) + ({}*x**4) + ({}*x**5) + ({}*x**6)'.format(
+                "%.3f" % f.coefficients[6],
+                "%.3f" % f.coefficients[5],
+                "%.3f" % f.coefficients[4],
+                "%.3f" % f.coefficients[3],
+                "%.3f" % f.coefficients[2],
+                "%.3f" % f.coefficients[1],
+                "%.3f" % f.coefficients[0]
+            )
+            # fit_x_coord = np.mgrid[(x.min()):(x.max()):depth*1j]
+            # plt.plot(fit_x_coord, f(fit_x_coord), '--', color='black')
+
+        if not order in [1, 2, 3, 4, 5, 6]:
+            fit = np.polyfit(x, y, order)  # fit = set of coeddicients (highest first)
+            f = np.poly1d(fit)
+            # raise ValueError('Supported orders: 1,2,3,4 only')
+
+        print("polynomial fit:")
+        print(lbl)
+
+        return new_x, f(new_x)
+
+
+    def int_ext_arr(self, x_arr, y_arr, x_grid, method):
+
+        from scipy import interpolate
+
+        assert len(x_arr) == len(y_arr)
+
+        if x_grid.min() == x_arr.min() and x_arr.max() == x_grid.max():
+            return interpolate.InterpolatedUnivariateSpline(x_arr, y_arr)(x_grid)
+        else:
+            if method in [1, 2, 3, 4, 5, 6]:
+                _, new_y = self.fit_polynomial(x_arr, y_arr, x_grid, method)
+                return new_y
+            elif method == 'Uni':
+                new_y = interpolate.UnivariateSpline(x_arr, y_arr)(x_grid)
+                return new_y
+            elif method == 'IntUni':
+                new_y = interpolate.InterpolatedUnivariateSpline(x_arr, y_arr)(x_grid)
+                return new_y
+            elif method == 'linear':
+                new_y = interpolate.interp1d(x_arr, y_arr, kind='linear', bounds_error=False)(x_grid)
+                return new_y
+            elif method == 'cubic':
+                new_y = interpolate.interp1d(x_arr, y_arr, kind='cubic', bounds_error=False)(x_grid)
+                return new_y
+            else:
+                raise NameError("method {} is not recongized".format(method))
+
+    def get_extrapolated_arr(self, v_n_x, v_n_y,
+                             criterion='', method='', depth=1000,
+                             x_left=0, x_right=0,
+                             x_start=None, x_stop=None):
+
+        """
+        :param v_n_x:
+        :param v_n_y:
+        :param criterion:
+        :param method:
+        :param depth: number (1 - 6) or 'Uni' 'IntUni' 'linear' 'cubic'
+        :param x_left:   Percentage, how far to go with new x_arr on the left
+        :param x_right:  Percentage, how far to go with new x_arr on the left
+        :x_start:        If not None, it will crop the x_arr to start from there
+        :x_stop:         If not None, it will crop the x_arr to stop there
+        :return:
+        """
+
+
+        x = np.array(self.get_arr(v_n_x, criterion=criterion))
+        y = np.array(self.get_arr(v_n_y, criterion=criterion))
+
+        assert len(x) == len(y)
+        assert np.all(np.diff(x) > 0)
+
+        if x_start != None and x_stop != None:
+            assert x_start < x_stop
+
+
+        if x_start != None:
+            idxs = np.where(x < x_start)
+            x = np.delete(x, idxs)
+            y = np.delete(y, idxs)
+            # x = x[x > x_start]
+            # y = y[x > x_start]
+        if x_stop != None:
+            idxs = np.where(x > x_stop)
+            x = np.delete(x, idxs)
+            y = np.delete(y, idxs)
+            # x = x[x < x_stop]
+            # y = y[x < x_stop]
+
+        if x_left != None:
+            x1 = x.min() - (x_left * (x.max() - x.min()) / 100)  #
+        else:
+            x1 = x.min()
+
+        if x_right != None:
+            x2 = x.max() + (x_right * (x.max() - x.min()) / 100)  #
+        else:
+            x2 = x.max()
+
+        # print(len(x), len(y))
+        assert len(x) == len(y)
+
+        assert len(x) > 3
+
+
+        x_grid = np.mgrid[x1:x2:depth * 1j]
+        y_grid = self.int_ext_arr(x, y, x_grid, method)
+
+        assert len(x_grid) == len(y_grid)
+
+        return x_grid, y_grid
+
+    def get_int_extra_arr(self, v_n_x, v_n_y,
+                          criterion='', method='', depth=1000,
+                          x_left=0, x_right=0,
+                          x_extr_start=None, x_extr_stop=None):
+
+        x = np.array(self.get_arr(v_n_x, criterion=criterion))
+        y = np.array(self.get_arr(v_n_y, criterion=criterion))
+
+        assert len(x) == len(y)
+        assert np.all(np.diff(x) > 0)
+
+        if x_left != None:
+            x1 = x.min() - (x_left * (x.max() - x.min()) / 100)  #
+        else:
+            x1 = x.min()
+
+        if x_right != None:
+            x2 = x.max() + (x_right * (x.max() - x.min()) / 100)  #
+        else:
+            x2 = x.max()
+
+        x_grid = np.mgrid[x1:x2:depth * 1j]
+        place = (x_grid > x.min()) & (x_grid < x.max())
+        y_int = self.int_ext_arr(x, y, x_grid, 'linear')
+        x_int = x_grid[place]
+
+
+        if x_extr_start != None and x_extr_stop != None:
+            assert x_extr_start < x_extr_stop
+
+        if x_extr_start != None:
+            idxs = np.where(x < x_extr_start)
+            x = np.delete(x, idxs)
+            y = np.delete(y, idxs)
+
+        if x_extr_stop != None:
+            idxs = np.where(x > x_extr_stop)
+            x = np.delete(x, idxs)
+            y = np.delete(y, idxs)
+
+        x_ext = x_grid
+        y_ext = self.int_ext_arr(x, y, x_grid, method=method)
+
+        # print(x_ext)
+        # print(y_ext)
+        # exit(1)
+
+        np.place(x_ext, place, x_int)
+        np.place(y_ext, place, y_int)
+
+        assert len(x_ext) == len(y_ext)
+
+        # print(x_ext)
+        # print(y_ext)
+        # exit(1)
+
+        return x_ext, y_ext
+
+
+
+
+
+
+
+        #
+        #
+        #
+        #
+        # x_grid, y_grid = self.get_extrapolated_arr(v_n_x, v_n_y,
+        #                                            criterion, method, depth,
+        #                                            x_left, x_right,
+        #                                            x_extr_start, x_extr_stop)
+        #
+        # x = np.array(self.get_arr(v_n_x, criterion=criterion))
+        # y = np.array(self.get_arr(v_n_y, criterion=criterion))
+        #
+        # place = (x_grid > x.min()) & (x_grid < x.max())
+        #
+        # x_int = x_grid[place]
+        # y_int = self.int_ext_arr(x, y, x_int, method='linear')
+        #
+        # np.place(x_grid, place, x_int)
+        # np.place(y_grid, place, y_int)
+        #
+        # assert len(x_grid) == len(y_grid)
+        #
+        # print(x_grid)
+        # print(y_grid)
+        # exit(1)
+        #
+        # return x_grid, y_grid
+
 
 
 class LOAD_NUCLEO:
@@ -771,22 +1123,88 @@ class NORMALIZE_NUCLEO(LOAD_NUCLEO):
 
 
 
+""" --- ---- ---- --- ---- -- -- TASK SPECIFIC FUNTIONS --- -- --- -- - -- -- -"""
+
+def resoluton_effect():
+
+    basic = "DD2_M13641364_M0_LK_SR_R04"
+    low = "DD2_M13641364_M0_LK_LR_R04"
+    high = "DD2_M13641364_M0_LK_HR_R04"
+
+    o_basic = ADD_METHODS_1D(basic)
+    o_low = ADD_METHODS_1D(low)
+    o_high = ADD_METHODS_1D(high)
+
+    time_basic, mass_basic = o_basic.get_arr("t_tot_flux", "_0_b_w"), o_basic.get_arr("mass_tot_flux", "_0_b_w")
+    time_low, mass_low = o_low.get_arr("t_tot_flux", "_0_b_w"), o_low.get_arr("mass_tot_flux", "_0_b_w")
+    time_high, mass_high = o_high.get_arr("t_tot_flux", "_0_b_w"), o_high.get_arr("mass_tot_flux", "_0_b_w"),
+
+    time_basic = time_basic - o_basic.get_par("tmerger_gw")
+    time_low = time_low - o_low.get_par("tmerger_gw")
+    time_high = time_high - o_high.get_par("tmerger_gw")
 
 
+    tmin = np.array([time_basic[-1], time_high[-1], time_low[-1]]).min()
+    basic_mass_tmin = mass_basic[find_nearest_index(time_basic, tmin)]
+
+    print("max time: {:.3f} s".format(tmin))
+
+    basic_low = basic_mass_tmin - mass_low[find_nearest_index(time_low, tmin)]
+    basic_hich = basic_mass_tmin - mass_high[find_nearest_index(time_high, tmin)]
+
+    print("m_basic: {}".format(basic_mass_tmin))
+    print("m_basic - m_low: {}".format(basic_low))
+    print("m_basic - m_high: {}".format(basic_hich))
+
+    print("low: {} percent of basic".format(basic_low / basic_mass_tmin * 100))
+    print("high:{} percent of basic".format(basic_hich / basic_mass_tmin * 100))
+
+def viscosity_effect():
+
+    basic = "DD2_M13641364_M0_SR"
+    with_lk = "DD2_M13641364_M0_LK_LR_R04"
+
+    o_basic = ADD_METHODS_1D(basic)
+    o_with_lk = ADD_METHODS_1D(with_lk)
+
+    time_basic, mass_basic = o_basic.get_arr("t_tot_flux", "_0_b_w"), o_basic.get_arr("mass_tot_flux", "_0_b_w")
+    time_with_lk, mass_with_lk = o_with_lk.get_arr("t_tot_flux", "_0_b_w"), o_with_lk.get_arr("mass_tot_flux", "_0_b_w")
+
+    time_basic = time_basic - o_basic.get_par("tmerger_gw")
+    time_with_lk = time_with_lk - o_with_lk.get_par("tmerger_gw")
+
+    tmin = np.array([time_basic[-1], time_with_lk[-1]]).min()
+    basic_mass_tmin = mass_basic[find_nearest_index(time_basic, tmin)]
+
+    print("max time: {:.3f} s".format(tmin))
+
+    with_lk_basic = mass_with_lk[find_nearest_index(time_with_lk, tmin)] - basic_mass_tmin
+
+    print("m_basic: {}".format(basic_mass_tmin))
+    print("m_basic - m_with_lk: {}".format(with_lk_basic))
+
+
+    print("with_lk: {} percent of basic".format(with_lk_basic / basic_mass_tmin * 100))
+
+    exit(0)
 
 if __name__ == '__main__':
 
+    # resoluton_effect()
+    viscosity_effect()
+    # exit(1)
+
     "--- --- TEST --- ---"
 
-    o_nuc = NORMALIZE_NUCLEO("DD2_M13641364_M0_SR")
-    print(o_nuc.get_normalized_sim_data("Y_final", "_0_b_w", "Asol=195"))
+    # o_nuc = NORMALIZE_NUCLEO("DD2_M13641364_M0_SR")
+    # print(o_nuc.get_normalized_sim_data("Y_final", "_0_b_w", "Asol=195"))
 
 
     # o_l_outflowed = LOAD_FILES("SLy4_M13641364_M0_SR")
     # print(o_l_outflowed.get_file("hist_ye.dat", "_0_b_w"))
     # print(o_l_outflowed.get_file("dens_unbnd.norm1.asc"))
 
-    o_par = COMPUTE_STORE_PAR("DD2_M13641364_M0_SR")
+    o_par = COMPUTE_STORE_PAR("DD2_M13641364_M0_LK_LR_PI")
 
     print(o_par.get_arr('hist_vel_inf_m', '_0_b_w')); exit(1)
 

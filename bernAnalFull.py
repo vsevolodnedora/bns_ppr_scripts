@@ -14,13 +14,24 @@ from units import time_constant, volume_constant, energy_constant
 from overall import MODELS
 models = MODELS()
 
+
+loc_in_data = "/data1/numrel/WhiskyTHC/Backup/2018/GW170817/"
+sims = ["DD2_M15091235_M0_LK_HR"]
+
+
 fraction = 0.98
 outfile="berntime.txt"
 asci_file = "outflow_det_0.asc"
-gws = os.listdir(Paths.gw170817)
+gws = os.listdir(Paths.gw170817) # list of sims to postrocess
 pprs_selected = models.get_selected_models({"dyn_phase":"passed"})
 
-def get_it_time_cum_mass(sim):
+
+
+# files to opy into the ppr tre
+flist = ["*.done", "output-0000/parfile.par", outfile, "WARNING*"]
+dirlist = ["outflow*", "collated*", "waveforms"]
+
+def get_it_time_cum_mass(sim, asci_file="outflow_det_0.asc"):
     fpath = Paths.gw170817 + sim + '/' + "output-*" + '/data/' + asci_file
     files = glob(fpath)
     print("files: {}".format(len(files)))
@@ -56,6 +67,30 @@ def get_it_time_cum_mass(sim):
 
     return np.array(times[1:]), np.array(masses1), np.array(masses2)
 
+def get_bern_time(simdir, fraction = 0.98, fnameout = Paths.gw170817 + isim + '/' + outfile):
+
+    times, masses1, masses2 = get_it_time_cum_mass(simdir)
+
+    idx_ = find_nearest_index(masses2, fraction * masses2.max())
+
+    if idx_ == len(times) - 1:
+        raise ValueError("{} of total mass is at the last timestep. Cannot do Bernoulli with that")
+
+    if times[idx_] > 0.95 * times.max():
+        Printcolor.yellow("Warning! berntime is {} total time".format(times[idx_] * 100 / times.max()))
+
+
+    if save:
+        Printcolor.blue("\tSaving {}".format(fnameout))
+        if os.path.isfile(fnameout):
+            Printcolor.yellow("Warning. File:{} already exist".format(fnameout))
+        open(fnameout, "w").write("{}\n".format(float(times[idx_])))
+
+    return float(times[idx_])
+
+
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
@@ -67,7 +102,7 @@ if __name__ == "__main__":
             # if not os.path.isdir(Paths.ppr_sims + isim + '/'):
 
             if not os.path.isdir(Paths.ppr_sims + isim + '/'):
-                if True:#click.confirm("\nStart and find berntime for {} ?".format(isim), default=True):
+                if click.confirm("\nFind berntime for {} ?".format(isim), default=True):
 
                     if not os.path.isdir(Paths.ppr_sims + isim + '/'):
                         Printcolor.blue("\tcreating {}".format(Paths.ppr_sims + isim + '/'))
@@ -101,17 +136,18 @@ if __name__ == "__main__":
                     plt.savefig(Paths.ppr_sims+isim+'/{}.png'.format(str(outfile.split('.')[0])), bbox_inches='tight', dpi=128)
                     plt.close()
 
-                    if True:#click.confirm("\nDo postprocessing?", default=True):
+                    if click.confirm("\nDo postprocessing?", default=True):
                         command = Paths.scripts + "analyze.sh" + ' ' + Paths.gw170817 + isim + '/'
                         Printcolor.blue("Initializing postprocessing...\n {}"
                               .format("# {}".format(command)))
                         os.system(command)
 
-                    if True: # click.confirm("\nCopy results?", default=True):
+                    if click.confirm("\nCopy results?", default=True):
                         Printcolor.blue("Copying results from \n{} to {}".format(Paths.gw170817+isim+'/', Paths.ppr_sims + isim + '/'))
 
                         flist = ["*.done", "output-0000/parfile.par", outfile, "WARNING*"]
-                        dirlist = ["outflow*", "collated*", "waveforms"]
+
+
 
                         for file_ in flist:
                             os.system("cp " + Paths.gw170817+isim+'/'+file_ + ' ' + Paths.ppr_sims + isim + '/')

@@ -45,7 +45,9 @@ from units import time_constant, volume_constant, energy_constant
 from math import pi, log10
 import time
 
-class LOAD_STORE_DATASETS:
+from d1analysis import LOAD_ITTIME
+
+class LOAD_STORE_DATASETS(LOAD_ITTIME):
     """
     Allows easy access to a scidata datasets of 2d data of a given simulation,
     loading them only if they are needed, and storing them for future accesses.
@@ -76,6 +78,8 @@ class LOAD_STORE_DATASETS:
 
     def __init__(self, sim):
 
+        LOAD_ITTIME.__init__(self, sim)
+
         self.sim = sim
         self.nlevels = 7
         self.gen_set = {'nlevels':7,
@@ -86,11 +90,17 @@ class LOAD_STORE_DATASETS:
                         'outdir': Paths.ppr_sims + sim + '/res_2d/'}
 
         # self.output_it_map = {}
-        self.output_it_map, self.it_time = \
-            set_it_output_map(Paths.gw170817+self.sim+'/')
 
-        self.iterations = np.array(self.it_time[:, 0], dtype=int)
-        self.times =  np.array(self.it_time[:, 1], dtype=float)
+        self.list_outputs = self.get_list_outputs()
+        isdata, self.iterations, self.times = \
+            self.get_ittime(output="overall", d1d2d3prof="d2")
+
+
+        # self.output_it_map, self.it_time = \
+        #     set_it_output_map(Paths.gw170817+self.sim+'/')
+
+        # self.iterations = np.array(self.it_time[:, 0], dtype=int)
+        # self.times =  np.array(self.it_time[:, 1], dtype=float)
 
         self.list_v_ns = ['rho', 'Y_e', 'temperature', 's_phi', 'entropy', 'dens_unbnd']
         self.list_planes=['xy', 'xz', 'xy']
@@ -100,7 +110,7 @@ class LOAD_STORE_DATASETS:
         self.dataset_matrix = [[[0
                                   for z in range(len(self.list_v_ns))]
                                   for k in range(len(self.list_planes))]
-                                  for s in range(len(self.output_it_map.keys()))]
+                                  for s in range(len(self.list_outputs))]
 
     # def set_it_output_map(self):
     #     """
@@ -164,62 +174,72 @@ class LOAD_STORE_DATASETS:
         if len(files) > 1:
             raise ValueError("More than 1 file ({}) found. \nFile:{} location:{}"
                              "\nFiles: {}"
-                             .format(len(files), fname, o_dir, files))
+                             .format(len(files), fname, self.gen_set['indir'] + o_dir +'/', files))
         if len(files) == 0:
-            raise ValueError("NO fils found. \nlocation:{}"
-                             .format(fname, o_dir))
+            raise ValueError("NO fils found for {}. \nlocation:{}"
+                             .format(fname, self.gen_set['indir'] + o_dir +'/'))
         dset = h5.dataset(files)
+        # grid = dset.get_grid(iteration=it)
+        # print("grid.origin: {}".format(grid.origin))
+        # print("grid.dim   : {}".format(grid.dim))
+        # print("grid.coordinates(): {}".format([ [np.array(coord).min(), np.array(coord).max()] for coord in grid.coordinates()]))
+        # print("grid.levels: {}".format([level for level in grid.levels]))
+        # print("grid.extent: {}".format(grid.extent))
+
+        # exit(1)
         # print("\t loading it:{} plane:{} v_n:{} dset:{}"
         #       .format(o_dir, plane, v_n, dset))
         dset.get_grid().mesh()
         self.dataset_matrix[self.i_output(o_dir)][self.i_plane(plane)][self.i_v_n(v_n)] = dset
 
     def i_output(self, o_dir):
-        if o_dir not in self.output_it_map.keys():
+        if o_dir not in self.list_outputs:
             raise NameError("plane:{} not in the plane_list (in the class)\n{}"
-                            .format(o_dir, self.output_it_map.keys()))
+                            .format(o_dir, self.list_outputs))
 
-        return int(self.output_it_map.keys().index(o_dir))
+        return int(self.list_outputs.index(o_dir))
 
     def is_dataset_loaded(self, o_dir, plane, v_n):
         if isinstance(self.dataset_matrix[self.i_output(o_dir)][self.i_plane(plane)][self.i_v_n(v_n)], int):
             self.load_dataset(o_dir, plane, v_n)
 
-    def it_to_output_dir(self, it):
-        req_output_data_dir = []
-        for output_data_dir in self.output_it_map.keys():
-            if int(it) in np.array(self.output_it_map[output_data_dir], dtype=int)[:, 0]:
-                req_output_data_dir.append(output_data_dir)
-
-        if len(req_output_data_dir) > 1:
-            if self.set_use_new_output_if_duplicated:
-                print("Warning: it:{} is found in multiple outputs:{}"
-                             .format(it, req_output_data_dir))
-                return req_output_data_dir[0]
-
-            raise ValueError("it:{} is found in multiple outputs:{}\n"
-                             "to overwrite, set 'set_use_new_output_if_duplicated=True' "
-                             .format(it, req_output_data_dir))
-        elif len(req_output_data_dir) == 0:
-            raise ValueError("it:{} not found in a output_it_map:\n{}\n"
-                                 .format(it, self.output_it_map.keys()))
-        else:
-            return req_output_data_dir[0]
+    # def it_to_output_dir(self, it):
+    #     req_output_data_dir = []
+    #     for output_data_dir in self.list_outputs:
+    #         if int(it) in np.array(self.output_it_map[output_data_dir], dtype=int)[:, 0]:
+    #             req_output_data_dir.append(output_data_dir)
+    #
+    #     if len(req_output_data_dir) > 1:
+    #         if self.set_use_new_output_if_duplicated:
+    #             print("Warning: it:{} is found in multiple outputs:{}"
+    #                          .format(it, req_output_data_dir))
+    #             return req_output_data_dir[0]
+    #
+    #         raise ValueError("it:{} is found in multiple outputs:{}\n"
+    #                          "to overwrite, set 'set_use_new_output_if_duplicated=True' "
+    #                          .format(it, req_output_data_dir))
+    #     elif len(req_output_data_dir) == 0:
+    #         raise ValueError("it:{} not found in a output_it_map:\n{}\n"
+    #                              .format(it, self.output_it_map.keys()))
+    #     else:
+    #         return req_output_data_dir[0]
 
     def get_dataset(self, it, plane, v_n):
-        o_dir = self.it_to_output_dir(it)
-        self.is_dataset_loaded(o_dir, plane, v_n)
-        dset = self.dataset_matrix[self.i_output(o_dir)][self.i_plane(plane)][self.i_v_n(v_n)]
+        # o_dir = self.it_to_output_dir(it)
+        output = self.get_output_for_it(it)
+        self.is_dataset_loaded(output, plane, v_n)
+        dset = self.dataset_matrix[self.i_output(output)][self.i_plane(plane)][self.i_v_n(v_n)]
         if not it in dset.iterations:
-            it__ = int(dset.iterations[find_nearest_index(np.array(dset.iterations), it)])
+            it__ = int(dset.iterations[self.find_nearest_index(np.array(dset.iterations), it)])
             raise ValueError("Iteration it:{} (located in {}) \n"
                              "not in the dataset list. Closest:{} Full list:\n{}"
-                             .format(it, o_dir, it__, dset.iterations))
+                             .format(it, output, it__, dset.iterations))
         return dset
 
     def del_dataset(self, it, plane, v_n):
-        o_dir = self.it_to_output_dir(it)
-        self.dataset_matrix[self.i_output(o_dir)][self.i_plane(plane)][self.i_v_n(v_n)] = 0
+        # o_dir = self.it_to_output_dir(it)
+        output = self.get_output_for_it(it)
+        self.dataset_matrix[self.i_output(output)][self.i_plane(plane)][self.i_v_n(v_n)] = 0
 
     # def get_time(self, it):
     #
@@ -244,9 +264,13 @@ class LOAD_STORE_DATASETS:
         print('-' * 25 + 'LOADING ALL DATASETS ({})'
               .format(self.gen_set['file_for_it']) + '-' * 25)
         Printcolor.yellow("Warning: loading all {} datasets "
-                          "is a slow process".format(len(self.output_it_map.keys())))
-        for o_dir in self.output_it_map.keys():
-            self.is_dataset_loaded(o_dir, plane, v_n)
+                          "is a slow process".format(len(self.list_outputs)))
+        for o_dir in self.list_outputs:
+            try:
+                self.is_dataset_loaded(o_dir, plane, v_n)
+            except ValueError:
+                Printcolor.red("Failed to load o_dir:{} plane:{} v_n:{}"
+                               .format(o_dir, plane, v_n))
 
         self.set_all_it_times_from_outputs(plane, v_n)
 
@@ -256,10 +280,10 @@ class LOAD_STORE_DATASETS:
 
         iterations = []
         times = []
-        for o_dir in self.output_it_map.keys():
-            if isinstance(self.dataset_matrix[self.i_output(o_dir)][self.i_plane(plane)][self.i_v_n(v_n)], int):
-                raise ValueError("Not all datasets are loaded. Missing: {}".format(o_dir))
-            dset = self.dataset_matrix[self.i_output(o_dir)][self.i_plane(plane)][self.i_v_n(v_n)]
+        for output in self.list_outputs:
+            if isinstance(self.dataset_matrix[self.i_output(output)][self.i_plane(plane)][self.i_v_n(v_n)], int):
+                raise ValueError("Not all datasets are loaded. Missing: {}".format(output))
+            dset = self.dataset_matrix[self.i_output(output)][self.i_plane(plane)][self.i_v_n(v_n)]
             # iterations.append(dset.iterations)
             for it in dset.iterations:
                 iterations.append(it)
@@ -326,20 +350,20 @@ class EXTRACT_STORE_DATA(LOAD_STORE_DATASETS):
         self.data_matrix = [[[0
                             for z in range(len(self.list_v_ns))]
                             for k in range(len(self.list_planes))]
-                            for s in range(len(self.it_time[:,0]))]
+                            for s in range(len(self.iterations))]
 
         self.grid_matrix = [[[0
                             for z in range(len(self.list_v_ns))]
                             for k in range(len(self.list_planes))]
-                            for s in range(len(self.it_time[:,0]))]
+                            for s in range(len(self.iterations))]
 
     def check_it(self, it):
-        if not int(it) in np.array(self.it_time[:,0], dtype=int):
-            it_ = int(self.it_time[find_nearest_index(self.it_time[:,0], it), 0])
+        if not int(it) in np.array(self.iterations, dtype=int):
+            it_ = int(self.iterations[self.find_nearest_index(self.iterations, it), 0])
             raise NameError("it:{} not in the list on iterations: Closest one: {}"
                             .format(it, it_))
 
-        idx = np.where(np.array(self.it_time[:,0], dtype=int) == int(it))
+        idx = np.where(np.array(self.iterations, dtype=int) == int(it))
 
         if len(idx) == 0:
             raise ValueError("For it:{} NO it are found in the it_time[:,0]".format(it))
@@ -351,7 +375,7 @@ class EXTRACT_STORE_DATA(LOAD_STORE_DATASETS):
 
     def i_it(self, it):
         self.check_it(it)
-        idx = list(self.it_time[:,0]).index(int(it))
+        idx = list(self.iterations).index(int(it))
         return idx
         #
         #
@@ -451,13 +475,13 @@ class EXTRACT_FOR_RL(EXTRACT_STORE_DATA):
                             for z in range(len(self.list_grid_v_ns))]
                             for j in range(self.nlevels)]
                             for k in range(len(self.list_planes))]
-                            for s in range(len(self.it_time[:,0]))]
+                            for s in range(len(self.iterations))]
 
         self.extracted_data_matrix = [[[[np.zeros(0,)
                             for z in range(len(self.list_v_ns))]
                             for j in range(self.nlevels)]
                             for k in range(len(self.list_planes))]
-                            for s in range(len(self.it_time[:,0]))]
+                            for s in range(len(self.iterations))]
 
         self.default_v_n = "rho"
 
@@ -574,8 +598,6 @@ class EXTRACT_FOR_RL(EXTRACT_STORE_DATA):
         return data
 
 
-
-
 class COMPUTE_STORE(EXTRACT_FOR_RL):
 
     def __init__(self, sim):
@@ -583,8 +605,8 @@ class COMPUTE_STORE(EXTRACT_FOR_RL):
 
 class MASK_STORE(COMPUTE_STORE):
 
-    def __init__(self, fname, symmetry=None):
-        COMPUTE_STORE.__init__(self, fname, symmetry)
+    def __init__(self, fname):
+        COMPUTE_STORE.__init__(self, fname)
 
         rho_const = 6.176269145886162e+17
         self.mask_setup = {'rm_rl': True,  # REMOVE previouse ref. level from the next
@@ -3324,6 +3346,17 @@ def get_nearest_iterations_for_times(sim, required_times, file_for_it="dens.norm
 if __name__ == '__main__':
 
     ''' --- DEBUGGING --- '''
+    sim = "DD2_M15091235_M0_LK_HR"
+    it = 366592
+
+    rl = 3
+    v_n = "rho"
+    o_dset = COMPUTE_STORE(sim)
+    dset = o_dset.get_dataset(it, "xy", "rho")
+    # print(dset.metadata)
+    exit(1)
+
+
     sim = "DD2_M15091235_M0_LK_HR"
     it = 366592
 

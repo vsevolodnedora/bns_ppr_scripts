@@ -44,6 +44,7 @@ from lists import *
 from filework import *
 from units import time_constant, volume_constant, energy_constant
 from outflowed import SIM_EJ_HIST
+from d1analysis import LOAD_ITTIME
 
 class MODELS:
 
@@ -901,13 +902,29 @@ class PLOT_MODELS:
         #     v_n2 += "_bern"
         idx = 1
         for isim, sim in sims.iterrows():
-
+            from scipy import interpolate
+            data_status = LOAD_ITTIME(isim)
+            print(isim)
             color = get_color_for_q(sim["M1"] / sim["M2"])
 
             # geodesic
             ej = SIM_EJ_HIST(isim, extension="_0", norm=True)
+
             ax.plot(ej.time_total_flux, ej.mass_total_flux, '-', color=color, lw=0.9,
                     label=r'${}:{}$'.format(idx, str(isim).replace('_', '\_')))
+
+
+            isd3data, d3it, d3times = data_status.get_ittime(output="overall", d1d2d3prof="d3")
+            if isd3data:
+                ax.plot(d3times, interpolate.interp1d(ej.time_total_flux, ej.mass_total_flux, bounds_error=False)(d3times),
+                        ':', color=color, lw=1.8)
+
+            are_profs, profit, proft = data_status.get_ittime(output="profiles", d1d2d3prof="prof")
+            if are_profs:
+                ax.plot(proft, interpolate.interp1d(ej.time_total_flux, ej.mass_total_flux, bounds_error=False)(proft),
+                        marker='|', color=color, markersize=3.3)
+
+
             ax.annotate(r'${}$'.format(idx), xy=(ej.time_total_flux[-1], ej.mass_total_flux[-1]), textcoords='data')
             # bernoulli
             ej2 = SIM_EJ_HIST(isim, extension=ext, norm=True)
@@ -1048,6 +1065,12 @@ class PLOT_MODELS:
 
     @staticmethod
     def plot_one_ave_final(ax, sims, v_nx, v_ny):
+
+        # for isim, sim in sims.iterrows():
+        #     # if sim["resolution"]
+        #     ax.plot(sim[v_nx], sim[v_ny], 'x',
+        #             color=eos_color(sim["EOS"]))
+
 
         for isim, sim in sims.iterrows():
             ax.plot(sim[v_nx], sim[v_ny], 'x',
@@ -1311,7 +1334,7 @@ def plot_table_quantities():
 
 if __name__ == '__main__':
 
-    plot_table_quantities()
+    # plot_table_quantities()
 
     # sim_cl = MODELS()
 
@@ -1319,8 +1342,8 @@ if __name__ == '__main__':
     #
     # sims = sim_cl.get_selected_models(lim_dic_in)
 
-    # PLOT_MODELS.plot_vn1_vn2_flux_evolution2(extension="_0_b")
-    PLOT_MODELS.plot_final_average(['Lambda'], ['Mej', 'vej', 'Yeej', 'Mdisk3D']) # 'vej', 'Yeej'
+    PLOT_MODELS.plot_vn1_vn2_flux_evolution2(extension="_0_b")
+    # PLOT_MODELS.plot_final_average(['Lambda'], ["q"]) # 'Mej', 'vej', 'Yeej', 'Mdisk3D',  'vej', 'Yeej'
 
 
 

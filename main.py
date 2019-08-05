@@ -1028,7 +1028,7 @@ def plot_Jflux_dd2_dd2PI():
     o_plot.main()
     print("Done")
     exit(0)
-plot_Jflux_dd2_dd2PI()
+# plot_Jflux_dd2_dd2PI()
 
 
 

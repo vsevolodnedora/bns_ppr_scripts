@@ -170,7 +170,7 @@ class BASIC_PARTS():
         if "mask" in dic.keys():
             if dic["mask"] == "negative":
                 z_arr = np.ma.masked_array(z_arr, z_arr < 0) # [z_arr < 0] = np.nan#
-                print(z_arr)
+                # print(z_arr)
             elif dic["mask"] == "positive":
                 z_arr = -1 * np.ma.masked_array(z_arr, z_arr > 0)
 
@@ -1039,20 +1039,43 @@ class PLOT_TASK(BASIC_PARTS):
         im = self.plot_colormesh(ax, dic, phi_arr, z_arr, data_arr.T)  # phi, r, data
         return im
 
-    def plot_d2_slice_from_d2_data_rl(self, ax, dic):
+    def plot_d2_slice_for_rl(self, ax, dic):
 
         data = dic['data']
-        data_arr = data.get_data_rl(dic['it'], dic['plane'], dic['rl'], dic['v_n'])
-        x_arr = data.get_grid_v_n_rl(dic['it'], dic['plane'], dic['rl'], "x")
-        if dic['plane'] == 'xy':
-            yz_arr = data.get_grid_v_n_rl(dic['it'], dic['plane'], dic['rl'], "y")
-        elif dic['plane'] == 'xz':
-            yz_arr = data.get_grid_v_n_rl(dic['it'], dic['plane'], dic['rl'], "z")
-        else:
-            raise NameError("unrecognized plane:{}".format(dic['plane']))
 
-        im = self.plot_colormesh(ax, dic, x_arr, yz_arr, data_arr)  # phi, r, data
-        return im
+        if dic['dtype'] == '2d rl':
+            data_arr = data.get_data_rl(dic['it'], dic['plane'], dic['rl'], dic['v_n'])
+            x_arr = data.get_grid_v_n_rl(dic['it'], dic['plane'], dic['rl'], "x")
+            if dic['plane'] == 'xy':
+                yz_arr = data.get_grid_v_n_rl(dic['it'], dic['plane'], dic['rl'], "y")
+            elif dic['plane'] == 'xz':
+                yz_arr = data.get_grid_v_n_rl(dic['it'], dic['plane'], dic['rl'], "z")
+            else:
+                raise NameError("unrecognized plane:{}".format(dic['plane']))
+            im = self.plot_colormesh(ax, dic, x_arr, yz_arr, data_arr)  # phi, r, data
+            return im
+        elif dic['dtype'] == '3d rl':
+            data = dic['data']
+            data_arr = data.get_data(dic['it'], dic['rl'], dic['plane'], dic['v_n'])
+            x_arr = data.get_data(dic['it'], dic['rl'], dic['plane'], "x")
+            if dic['plane'] == 'xy':
+                yz_arr = data.get_data(dic['it'], dic['rl'], dic['plane'], "y")
+            elif dic['plane'] == 'xz':
+                yz_arr = data.get_data(dic['it'], dic['rl'], dic['plane'], "z")
+            else:
+                raise NameError("unrecognized plane:{}".format(dic['plane']))
+
+            # print(data_arr);
+            # # exit(1)
+            # print(x_arr);
+            # # exit(1)
+            # print(yz_arr);
+            # exit(1)
+
+            im = self.plot_colormesh(ax, dic, x_arr, yz_arr, data_arr)  # phi, r, data
+            return im
+        else:
+            raise NameError("dic['dtype']={} is not recognized".format(dic['dtype']))
 
     def plot_task(self, ax, dic):
 
@@ -1100,7 +1123,9 @@ class PLOT_TASK(BASIC_PARTS):
             return self.plot_2d_movie_plot_xz(ax, dic)
 
         elif dic['task'] == 'slice':
-            return self.plot_d2_slice_from_d2_data_rl(ax, dic)
+            return self.plot_d2_slice_for_rl(ax, dic)
+
+
 
         else:
             raise NameError("dic['task'] is not recognized ({})".format(dic["task"]))
@@ -1177,11 +1202,12 @@ class PLOT_MANY_TASKS(PLOT_TASK):
 
     def set_plot_matrix(self):
 
-        fig = plt.figure(figsize=self.gen_set['figsize'])  # (<->; v)
+         # (<->; v)
+        # fig = self.figure
 
         if self.gen_set['type'] == 'cartesian':
             # initializing the matrix with dummy axis objects
-            sbplot_matrix = [[fig.add_subplot(self.n_rows, self.n_cols, 1)
+            sbplot_matrix = [[self.figure.add_subplot(self.n_rows, self.n_cols, 1)
                               for x in range(self.n_rows)]
                              for y in range(self.n_cols)]
 
@@ -1190,28 +1216,28 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                 for n_col in range(self.n_cols):
 
                     if n_col == 0 and n_row == 0:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i)
+                        sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i)
                     elif n_col == 0 and n_row > 0:
                         if self.gen_set['sharex']:
-                            sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i,
                                                                           sharex=sbplot_matrix[n_col][0])
                         else:
-                            sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i)
+                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i)
                     elif n_col > 0 and n_row == 0:
                         if self.gen_set['sharey']:
-                            sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i,
                                                                           sharey=sbplot_matrix[0][n_row])
                         else:
-                            sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i)
+                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i)
                     else:
                         if self.gen_set['sharex'] and not self.gen_set['sharey']:
-                            sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i,
                                                                           sharex=sbplot_matrix[n_col][0])
                         elif not self.gen_set['sharex'] and self.gen_set['sharey']:
-                            sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i,
                                                                           sharey=sbplot_matrix[0][n_row])
                         else:
-                            sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i,
+                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i,
                                                                           sharex=sbplot_matrix[n_col][0],
                                                                           sharey=sbplot_matrix[0][n_row])
 
@@ -1221,7 +1247,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
 
         elif self.gen_set['type'] == 'polar':
             # initializing the matrix with dummy axis objects
-            sbplot_matrix = [[fig.add_subplot(self.n_rows, self.n_cols, 1, projection='polar')
+            sbplot_matrix = [[self.figure.add_subplot(self.n_rows, self.n_cols, 1, projection='polar')
                                   for x in range(self.n_rows)]
                                   for y in range(self.n_cols)]
 
@@ -1230,15 +1256,15 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                 for n_col in range(self.n_cols):
 
                     if n_col == 0 and n_row == 0:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+                        sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
                     elif n_col == 0 and n_row > 0:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+                        sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
                                                                       # sharex=self.sbplot_matrix[n_col][0])
                     elif n_col > 0 and n_row == 0:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+                        sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
                                                                       # sharey=self.sbplot_matrix[0][n_row])
                     else:
-                        sbplot_matrix[n_col][n_row] = fig.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
+                        sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
                                                                       # sharex=self.sbplot_matrix[n_col][0],
                                                                       # sharey=self.sbplot_matrix[0][n_row])
                     i += 1
@@ -1248,7 +1274,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
         else:
             raise NameError("type of the plot is not recognized. Use 'polar' or 'cartesian' ")
 
-        return fig, sbplot_matrix
+        return sbplot_matrix
 
     def plot_images(self):
 
@@ -1267,7 +1293,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                         # dic = self.plot_dic_matrix[n_col][n_row]
                         if isinstance(dic, int):
                             print("Warning: Dictionary for row:{} col:{} not set".format(n_row, n_col))
-                            self.fig.delaxes(ax)  # delets the axis for empty plot
+                            self.figure.delaxes(ax)  # delets the axis for empty plot
                         else:
                             dic = dict(dic)
                             im = self.plot_task(ax, dic)
@@ -1362,7 +1388,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                     raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
                                     .format(location))
 
-                cax1 = self.fig.add_axes(pos2)
+                cax1 = self.figure.add_axes(pos2)
                 if location == 'right':
                     if 'fmt' in cdic.keys() and cdic['fmt'] != None:
                         cbar = plt.colorbar(im, cax=cax1, extend='both', format=cdic['fmt'])
@@ -1433,12 +1459,13 @@ class PLOT_MANY_TASKS(PLOT_TASK):
         if len(self.set_plot_dics) == 0:
             raise ValueError("No plot dics have been passed. Exiting")
 
+        self.figure = plt.figure(figsize=self.gen_set['figsize'])
         # initializing the n_cols, n_rows
         self.n_rows, self.n_cols = self.set_ncols_nrows()
         # initializing the matrix of dictionaries of the
         self.plot_dic_matrix = self.set_plot_dics_matrix()
         # initializing the axis matrix (for all subplots) and image matrix fo colorbars
-        self.fig, self.sbplot_matrix = self.set_plot_matrix()
+        self.sbplot_matrix = self.set_plot_matrix()
         # plotting
         self.image_matrix = self.plot_images()
         # adding colobars
@@ -1449,3 +1476,9 @@ class PLOT_MANY_TASKS(PLOT_TASK):
 
         print("\tPlotted:\n\t{}".format(self.gen_set["figdir"] + self.gen_set["figname"]))
 
+        # for n_row in range(self.n_rows):
+        #     for n_col in range(self.n_cols):
+        #         self.figure.delaxes(self.sbplot_matrix[n_col][n_row])
+
+        # self.figure.delaxes(self.sbplot_matrix)
+        self.figure.clear()

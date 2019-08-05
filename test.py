@@ -70,6 +70,23 @@ dic_to_tul={
              "SLy4_13641364_M0_LK_HR":  "SLy4_M13641364_M0_LK_HR"
 }
 
+print(4.925 * 10**(-6) * 299792458)
+print(-26.4717 / 1.476)
+print(18.5283 / 1.476)
+
+string = "rsync -arvP --append di52pub@hw.supermuc.lrz.de"
+for i in range(1, 11):
+    string = string + ":/gss/scratch/pn56zo/di52pub/simulations/deep_simulations/SFHo_14521283_M0_LK_HR/output-{0:04d}.tar ".format(i)
+string = string + "./"
+print string
+
+
+
+for i in range(56):
+    print("tar -xvf output-{0:04d}.tar".format(i) +
+          " --directory /data1/numrel/WhiskyTHC/Backup/2018/SLy4_M130130_SR_physics/SLy4_M130130_VM0_SR/;\n")
+
+exit(1)
 # 25641369fmjks
 for sim in list_lrz_sim:
     try:

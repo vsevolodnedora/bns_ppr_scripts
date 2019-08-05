@@ -16,7 +16,7 @@ import scipy.optimize as opt
 import matplotlib as mpl
 import pandas as pd
 import numpy as np
-import itertools
+# import itertools-
 import os.path
 import cPickle
 import time
@@ -44,7 +44,227 @@ from gw import SIM_GW
 
 
 
+
+
+
+    # def get_it_time_cum_mass(self):
+    #
+    #     outdirs = self.get_outputdirs()
+    #     files = []
+    #     for outdir in outdirs:
+    #         fpath = outdir + 'data/' + self.ittime_fname
+    #         if os.path.isfile(fpath):
+    #             self.
+    #         try:
+    #
+    #
+    #
+    #     fpath = simdir + "output-*" + '/data/' + self.ittime_fname
+    #     files = glob(fpath)
+    #     print("\tcum_muss files found {}.".format(len(files)))
+    #     if len(files) == 0:
+    #         raise ValueError("No cum_muss files found for {} found in outputs"
+    #                          .format(fpath))
+    #
+    #     times, fluxes1, fluxes2 = np.zeros(0, ), np.zeros(0, ), np.zeros(0, )
+    #     for file_ in files:
+    #         time_, flux1, flux2 = np.loadtxt(file_, usecols=(1, 2, 5), unpack=True)
+    #         times = np.hstack((times, time_))
+    #         fluxes1 = np.hstack((fluxes1, flux1))
+    #         fluxes2 = np.hstack((fluxes2, flux2))
+    #
+    #     times = np.array(times)
+    #     fluxes1 = np.array(fluxes1)
+    #     fluxes2 = np.array(fluxes2)
+    #
+    #     print(times.shape, fluxes1.shape, fluxes2.shape)
+    #
+    #     times, fluxes1, fluxes2 = x_y_z_sort(times,
+    #                                          fluxes1,
+    #                                          fluxes2, sort_by_012=0)
+    #
+    #     mass1 = mass2 = 0.0
+    #     masses1, masses2 = [], []
+    #
+    #     for i in range(1, times.shape[0]):
+    #         mass1 += fluxes1[i - 1] * (times[i] - times[i - 1])
+    #         mass2 += fluxes2[i - 1] * (times[i] - times[i - 1])
+    #         masses1.append(mass1)
+    #         masses2.append(mass2)
+    #
+    #     return np.array(times[1:]), np.array(masses1), np.array(masses2)
+
+class LOAD_ITTIME:
+
+    def __init__(self, sim):
+
+        if not os.path.isfile(Paths.ppr_sims + sim + '/' + "ittime.h5"):
+            from analyze import SIM_STATUS
+            print("\tno ittime.h5 found. Creating...")
+            SIM_STATUS(sim, save=True, clean=True)
+
+        self.set_use_selected_output_if_many_found = True
+        self.clean = True
+        self.sim = sim
+
+        self.ittime_fname = Paths.ppr_sims + self.sim + '/ittime.h5'
+
+        self.dfile = h5py.File(self.ittime_fname, "r")
+
+        if not self.clean:
+            print("loaded file:\n{}\n contains:")
+            for v_n in self.dfile:
+                print(v_n)
+
+    @staticmethod
+    def find_nearest_index(array, value):
+        ''' Finds index of the value in the array that is the closest to the provided one '''
+        idx = (np.abs(array - value)).argmin()
+        return idx
+
+    def get_list_outputs(self):
+        return [str(output) for output in self.dfile.keys() if not output in ["profiles", "overall"]]
+
+    def get_ittime(self, output="overall", d1d2d3prof='d1'):
+        """
+        :param output: "output-0000", or "overall" or "profiles"
+        :param d1d2d3prof:
+        :return:
+        """
+        return bool(np.array(self.dfile[output]['{}data'.format(d1d2d3prof)], dtype=int)), \
+               np.array(self.dfile[output]['it{}'.format(d1d2d3prof)], dtype=int), \
+               np.array(self.dfile[output]['t{}'.format(d1d2d3prof)], dtype=float)
+
+    def get_output_for_it(self, it, d1d2d3='d1'):
+        isdata, allit, alltimes = self.get_ittime(output="overall", d1d2d3prof=d1d2d3)
+        if not isdata:
+            raise ValueError("data for d1d2d3:{} not available".format(d1d2d3))
+        if it < allit[0] or it > allit[-1]:
+            raise ValueError("it:{} is below min:{} or above max:{} in d1d2d3:{}"
+                             .format(it, allit[0], allit[-1], d1d2d3))
+        if not it in allit:
+            raise ValueError("it:{} is not in alliterations:{} for d1d2d3:{}"
+                             .format(it, allit, d1d2d3))
+        required_outputs = []
+        for key in self.dfile:
+            if key not in ["profiles", "overall"]:
+                output = key
+                isdata, outputiterations, outputtimesteps = \
+                    self.get_ittime(output, d1d2d3)
+                if isdata:
+                    if int(it) in outputiterations:
+                        required_outputs.append(output)
+        if len(required_outputs) == 0:
+            raise ValueError("no output is found for it:{} d1d2d3:{}"
+                             .format(it, d1d2d3))
+        elif len(required_outputs) > 1:
+            if not self.clean:
+                print("Warning. it:{} is found in multiple outputs:{} for d1d2d3:{}"
+                      .format(it, required_outputs, d1d2d3))
+            if self.set_use_selected_output_if_many_found:
+                return required_outputs[0]
+            else:
+                raise ValueError("Set 'self.set_use_selected_output_if_many_found=True' to get"
+                                 "0th output out of many found")
+        else:
+            return required_outputs[0]
+
+    def get_nearest_time(self, time__, d1d2d3='d1'):
+
+        isdata, allit, alltimes = self.get_ittime(output="overall", d1d2d3prof=d1d2d3)
+        if not isdata:
+            raise ValueError("data for d1d2d3:{} not available".format(d1d2d3))
+        if time__ < alltimes[0] or time__ > alltimes[-1]:
+            raise ValueError("time:{} is below min:{} or above max:{} in d1d2d3:{}"
+                             .format(time__, alltimes[0], alltimes[-1], d1d2d3))
+        if time__ in alltimes:
+            time_ = time__
+        else:
+            time_ = alltimes[self.find_nearest_index(alltimes, time__)]
+            if not self.clean:
+                print("nearest time to {}, is {}, selected for d1d2d3:{}"
+                      .format(time__, time_, d1d2d3))
+
+        return time_
+
+    def get_it_for_time(self, time__, d1d2d3='d1'):
+        time_ = self.get_nearest_time(time__, d1d2d3)
+        isdata, allit, alltimes = self.get_ittime(output="overall", d1d2d3prof=d1d2d3)
+        if isdata:
+            return int(allit[self.find_nearest_index(alltimes, time_)])
+        else:
+            raise ValueError("no data available for d1d2d3:{}".format(d1d2d3))
+
+    def get_time_for_it(self, it, d1d2d3='d1'):
+
+        isdata, allit, alltimes = self.get_ittime(output="overall", d1d2d3prof=d1d2d3)
+        if not isdata:
+            raise ValueError("data for d1d2d3:{} not available".format(d1d2d3))
+        if it < allit[0] or it > allit[-1]:
+            raise ValueError("it:{} is below min:{} or above max:{} in d1d2d3:{}"
+                             .format(it, allit[0], allit[-1], d1d2d3))
+        if not it in allit:
+            raise ValueError("it:{} is not in alliterations:{} for d1d2d3:{}"
+                             .format(it, allit, d1d2d3))
+
+        if isdata:
+            return float(alltimes[self.find_nearest_index(allit, it)])
+        else:
+            raise ValueError("no data available for d1d2d3:{}".format(d1d2d3))
+
+    def get_output_for_time(self, time__, d1d2d3='d1'):
+
+        it = self.get_it_for_time(time__, d1d2d3)
+        output = self.get_output_for_it(int(it), d1d2d3)
+
+        return output
+
+''' --- '''
+
 class LOAD_FILES:
+
+    list_outflowed_files = [
+        "total_flux.dat",
+        "hist_temperature.dat",
+        "hist_theta.dat",
+        "hist_ye.dat",
+        "hist_log_rho.dat", #hist_rho.dat",
+        "hist_entropy.dat",
+        "hist_vel_inf.dat",
+        "hist_vel_inf_bern.dat",
+
+        "ejecta_profile.dat",
+        "ejecta_profile_bern.dat",
+    ]
+
+    list_of_outflowed_h5_files = [
+        "corr_vel_inf_bern_theta.h5",
+        "corr_vel_inf_theta.h5",
+        "corr_ye_entropy.h5",
+        "corr_ye_theta.h5"
+    ]
+
+    list_collated_files = [
+        "dens_unbnd.norm1.asc",
+        "dens_unbnd_bernoulli.norm1.asc",
+        "dens.norm1.asc",
+    ]
+
+    list_gw_files = [
+        "waveform_l2_m2.dat",
+        "tmerger.dat",
+        "tcoll.dat"
+    ]
+
+    list_mkn_files = [
+        "mass_averages.dat",
+        # "mkn_model.h5",
+        # "AT2017gfo.h5"
+    ]
+
+    list_3d_data_files = [
+        "disk_mass.txt"
+    ]
 
     def __init__(self, sim):
         self.gen_set = {
@@ -63,7 +283,7 @@ class LOAD_FILES:
                            "hist_temperature.dat",
                            "hist_theta.dat",
                            "hist_ye.dat",
-                           "hist_rho.dat",
+                           "hist_log_rho.dat", #hist_rho.dat",
                            "hist_entropy.dat",
                            "hist_vel_inf.dat",
                            "hist_vel_inf_bern.dat",
@@ -92,8 +312,9 @@ class LOAD_FILES:
         ]
 
         self.list_mkn_files = [
-            "mkn_model.h5",
-            "AT2017gfo.h5"
+            "mass_averages.dat",
+            # "mkn_model.h5",
+            # "AT2017gfo.h5"
         ]
 
         self.list_3d_data_files = [
@@ -542,6 +763,7 @@ class COMPUTE_STORE_PAR(COMPUTE_STORE_ARR):
 
         return self.parameter_matrix[self.i_cr(criterion)][self.i_par(v_n)]
 
+
 class ADD_METHODS_1D(COMPUTE_STORE_PAR):
 
     def __init__(self, sim):
@@ -832,7 +1054,7 @@ class ADD_METHODS_1D(COMPUTE_STORE_PAR):
         #
         # return x_grid, y_grid
 
-
+''' --- '''
 
 class LOAD_NUCLEO:
 
@@ -1119,6 +1341,12 @@ class NORMALIZE_NUCLEO(LOAD_NUCLEO):
 
         assert len(all_As) == len(all_Ys)
 
+''' --- '''
+
+
+
+
+
 
 
 
@@ -1190,11 +1418,15 @@ def viscosity_effect():
 
 if __name__ == '__main__':
 
+
+
     # resoluton_effect()
-    viscosity_effect()
+    # viscosity_effect()
     # exit(1)
 
-    "--- --- TEST --- ---"
+
+
+
 
     # o_nuc = NORMALIZE_NUCLEO("DD2_M13641364_M0_SR")
     # print(o_nuc.get_normalized_sim_data("Y_final", "_0_b_w", "Asol=195"))

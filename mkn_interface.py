@@ -379,7 +379,7 @@ class COMPUTE_LIGHTCURVE():
         os.chdir(Paths.mkn)
         # from mkn import MKN
 
-        print(self.ejecta_vars['psdynamics']['m_ej'])
+        # print(self.ejecta_vars['psdynamics']['m_ej'])
         model = MKN(self.glob_params, self.glob_vars, self.ejecta_params, self.ejecta_vars, self.source_name)
 
         print('I am computing the light curves')
@@ -3636,6 +3636,17 @@ def compute_for_1_simulations_fully_informed_2_comp_varying_total_bern_mass():
     sim = "DD2_M13641364_M0_LK_SR_R04"
     o_data = ADD_METHODS_1D(sim)
 
+    # sim = "LS220_M13641364_M0_LK_SR"
+    # make_model = COMPUTE_LIGHTCURVE(sim)
+    # make_model.output_fname = 'mkn_model1.h5'  # time in ms for a file
+    # make_model.set_dyn_iso_aniso = "aniso"
+    # make_model.set_psdyn_iso_aniso = ""
+    # make_model.set_wind_iso_aniso = ""
+    # make_model.set_secular_iso_aniso = ""
+    # make_model.set_par_war()
+    # make_model.compute_save_lightcurve(write_output=True)
+    # exit(1)
+
     for t in ti:
 
         # times, masses = o_data.get_extrapolated_arr(v_n_x='t_tot_flux', v_n_y='mass_tot_flux',
@@ -4093,8 +4104,8 @@ if __name__ == '__main__':
     # compute_for_1_simulations_fully_informed_2_comp_varying_total_kappa_low_theta()
     # compute_for_1_simulations_fully_informed_2_comp_varying_total_bern_mass_psdyn_theta()
     # compute_for_1_simulations_fully_informed_2_comp_varying_total_bern_mass_psdyn_opacity()
-    compute_for_1_simulations_fully_informed_2_comp()
-    compute_for_1_simulations_fully_informed_4comp()
+    # compute_for_1_simulations_fully_informed_2_comp()
+    # compute_for_1_simulations_fully_informed_4comp()
 
 
 

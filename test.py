@@ -5,16 +5,17 @@ from _curses import raw
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import ticker
 import matplotlib.pyplot as plt
-from matplotlib import rc
-plt.rc('text', usetex=True)
-plt.rc('font', family='serif')
-import scivis.units as ut # for tmerg
-import statsmodels.formula.api as smf
-import scipy.optimize as opt
-from math import pi, sqrt
-import matplotlib as mpl
+# from matplotlib import rc
+# plt.rc('text', usetex=True)
+# plt.rc('font', family='serif')
+# import scivis.units as ut # for tmerg
+# import statsmodels.formula.api as smf
+# import scipy.optimize as opt
+# from math import pi, sqrt
+# import matplotlib as mpl
+# from glob import glob
+# import pandas as pd
 from glob import glob
-import pandas as pd
 import numpy as np
 import itertools
 import os.path
@@ -32,7 +33,7 @@ import scidata.xgraph as xg
 from scidata.carpet.interp import Interpolator
 
 from scipy import interpolate
-cmap = plt.get_cmap("viridis")
+# cmap = plt.get_cmap("viridis")
 # from sklearn.linear_model import LinearRegression-
 from scipy.optimize import fmin
 from matplotlib.ticker import AutoMinorLocator, FixedLocator, NullFormatter, \
@@ -48,9 +49,26 @@ from math import pi, log10
 import time
 
 
+""" --- scidata problem --- """
+
+# fpath = "/data1/numrel/WhiskyTHC/Backup/2018/SLy4_M130130_SR_physics/SLy4_M130130_M0_SR/tmp/output-0012/data/"
+# v_n = "thc_M0_abs_energy.file_*.h5"
+# v_nn = "/THC_LEAKAGEM0::thc_M0_abs_energy"
+# it=475136
+# flist = glob(fpath + v_n)
+# print("\tfiles found: {}".format(len(flist)))
+# # grid = h5.
+# dset = h5.dataset(flist)
+# reflevel = dset.get_reflevel(variable=v_nn, iteration=it, reflevel=0, timelevel=0)
+# data = dset.get_reflevel_data(reflevel=reflevel, variable="/THC_LEAKAGEM0::thc_M0_ndens_nua", iteration=it, timelevel=0)
+# print(data)
+# exit(0)
+
 """ --- COPY TARS FROM LRZ TO TULLIO """
 
-list_lrz_sim = ["BHBlp_13641364_M0_LK_HR",
+list_lrz_sim = [
+             ""
+             "BHBlp_13641364_M0_LK_HR",
              "DD2_13641364_M0_LK_LR_PI",
              "DD2_15091235_M0_LK_HR",
              "LS220_13641364_M0_LK_HR",
@@ -70,9 +88,54 @@ dic_to_tul={
              "SLy4_13641364_M0_LK_HR":  "SLy4_M13641364_M0_LK_HR"
 }
 
+lrz_sim_list = [
+    "DD2_13641364_LK_SR_PI",
+    "DD2_13641364_M0_LK_LR_PI",
+    "DD2_13641364_M0_LK_SR_PI",
+    "DD2_15091235_M0_LK_HR",
+    "LS220_13641364_M0_LK_HR",
+    "LS220_13641364_M0_LK_HR",
+    "LS220_14691268_M0_LK_HR",
+    "LS220_14691268_M0_LK_HR",
+    "SFHo_14521283_M0_LK_HR_2",
+    "SLy4_13641364_M0_LK_HR",
+    "SLy4_13641364_M0_LK_LR"
+]
+
+# for sim in lrz_sim_list:
+#     print("mkdir $WORK/old_simulations/{}".format(sim))
+
+
+for sim in lrz_sim_list:
+    print("rsync -arvP --append $SCRATCH/simulations/deep_simulations/{}/*.tar $WORK/old_simulations/{}/".format(sim, sim))
+print("echo 'done'")
+# for sim in lrz_sim_list:
+#     print("find {}".format(sim)),
+#     print(" -exec touch '{}' \;")
+# print("echo 'done'")
+
+
+
+
+
+
+
+
+
 print(4.925 * 10**(-6) * 299792458)
 print(-26.4717 / 1.476)
 print(18.5283 / 1.476)
+
+os.system("display ~/Tullio/postprocessed3/LS220_M14691268_M0_LK_SR/res_3d/1490944/slices/Ye_rl0.png")
+exit(1)
+
+
+
+
+
+for i in [14, 20, 24, 28, 32, 38, 44, 50, 53]:
+    print("tar -xvf output-{0:04d}.dat.tar --directory tmp/;".format(i))
+print("echo 'done'")
 
 string = "rsync -arvP --append di52pub@hw.supermuc.lrz.de"
 for i in range(1, 11):
@@ -99,7 +162,6 @@ for sim in list_lrz_sim:
 
 print("Finished copying tars")
 exit(1)
-
 
 
 

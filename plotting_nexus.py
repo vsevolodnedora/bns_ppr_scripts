@@ -914,6 +914,7 @@ class PLOT_TASK(BASIC_PARTS):
         return 0
 
 
+
     def plot_summed_correlation_with_time(self, ax, dic):
 
         data = dic['data']
@@ -1139,6 +1140,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
 
         self.gen_set = {
             "figdir": './',
+            "dpi": 128,
             "figname": "rename_me.png",
             # "figsize": (13.5, 3.5), # <->, |
             "figsize": (3.8, 3.5),  # <->, |
@@ -1215,34 +1217,46 @@ class PLOT_MANY_TASKS(PLOT_TASK):
             for n_row in range(self.n_rows):
                 for n_col in range(self.n_cols):
 
+                    # if 'hight' in plotdic:
+                    #     if plotdic['hight'] != None:
+                    #         hei
+
+
                     if n_col == 0 and n_row == 0:
-                        sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i)
+                        sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i)#, aspect=aspect)#, adjustable='box')
                     elif n_col == 0 and n_row > 0:
                         if self.gen_set['sharex']:
                             sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i,
-                                                                          sharex=sbplot_matrix[n_col][0])
+                                                                          sharex=sbplot_matrix[n_col][0])#, aspect=aspect)#, adjustable='box')
                         else:
-                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i)
+                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i)#, aspect=aspect)#, adjustable='box')
                     elif n_col > 0 and n_row == 0:
                         if self.gen_set['sharey']:
                             sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i,
-                                                                          sharey=sbplot_matrix[0][n_row])
+                                                                          sharey=sbplot_matrix[0][n_row])#, aspect=aspect)#, adjustable='box')
                         else:
-                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i)
+                            sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i)#, aspect=aspect)#, adjustable='box')
                     else:
                         if self.gen_set['sharex'] and not self.gen_set['sharey']:
                             sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i,
-                                                                          sharex=sbplot_matrix[n_col][0])
+                                                                          sharex=sbplot_matrix[n_col][0])#, aspect=aspect)#, adjustable='box')
                         elif not self.gen_set['sharex'] and self.gen_set['sharey']:
                             sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i,
-                                                                          sharey=sbplot_matrix[0][n_row])
+                                                                          sharey=sbplot_matrix[0][n_row])#, aspect=aspect)#, adjustable='box')
                         else:
                             sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i,
                                                                           sharex=sbplot_matrix[n_col][0],
-                                                                          sharey=sbplot_matrix[0][n_row])
+                                                                          sharey=sbplot_matrix[0][n_row])#, aspect=aspect)#, adjustable='box')
 
+
+                    plotdic = self.plot_dic_matrix[n_col][n_row]
+
+                    if "apsect" in plotdic:
+                        if plotdic["aspect"] != None:
+                            aspect = float(plotdic["aspect"])
+                            sbplot_matrix[n_col][n_row].set_aspect(aspect)
                         # sbplot_matrix[n_col][n_row].axes.get_yaxis().set_visible(False)
-                    # sbplot_matrix[n_col][n_row] = fig.add_subplot(n_rows, n_cols, i)
+                    # sbplot_matrix[n_col][n_row].set_aspect(aspect)#fig.add_subplot(n_rows, n_cols, i)
                     i += 1
 
         elif self.gen_set['type'] == 'polar':
@@ -1274,6 +1288,8 @@ class PLOT_MANY_TASKS(PLOT_TASK):
         else:
             raise NameError("type of the plot is not recognized. Use 'polar' or 'cartesian' ")
 
+        # print(sbplot_matrix)
+
         return sbplot_matrix
 
     def plot_images(self):
@@ -1290,6 +1306,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                     if n_col + 1 == int(dic['position'][1]) and n_row + 1 == int(dic['position'][0]):
                         print("\tPlotting n_row:{} n_col:{}".format(n_row, n_col))
                         ax = self.sbplot_matrix[n_col][n_row]
+                        print("\t\tsubplot:{}".format(ax))
                         # dic = self.plot_dic_matrix[n_col][n_row]
                         if isinstance(dic, int):
                             print("Warning: Dictionary for row:{} col:{} not set".format(n_row, n_col))
@@ -1309,7 +1326,8 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                             self.remover_some_ticks(ax, dic)
                             self.plot_text(ax, dic)
                             self.add_fancy_to_ax(ax, dic)
-
+                            if 'aspect' in dic:
+                                ax.set_aspect(dic['aspect'])
 
         return image_matrix
 
@@ -1367,7 +1385,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                     ax_to_use = self.sbplot_matrix[-1][n_row]
                     pos1 = ax_to_use.get_position()
                     pos2 = [pos1.x0 + pos1.width + shift_h,
-                            pos1.y0,
+                            pos1.y0 + shift_w,
                             cbar_width,
                             pos1.height]
                 elif location == 'left':
@@ -1451,7 +1469,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
         plt.subplots_adjust(wspace=self.gen_set["subplots_adjust_w"])
         # plt.tight_layout()
         plt.savefig('{}{}'.format(self.gen_set["figdir"], self.gen_set["figname"]),
-                    bbox_inches='tight', dpi=128)
+                    bbox_inches='tight', dpi=self.gen_set["dpi"])
         plt.close()
 
     def main(self):
@@ -1467,6 +1485,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
         # initializing the axis matrix (for all subplots) and image matrix fo colorbars
         self.sbplot_matrix = self.set_plot_matrix()
         # plotting
+        print(self.sbplot_matrix)
         self.image_matrix = self.plot_images()
         # adding colobars
         self.plot_colobars()

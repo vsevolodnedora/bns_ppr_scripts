@@ -79,7 +79,7 @@ from units import time_constant, volume_constant, energy_constant
 from math import pi, log10
 import time
 
-from d1analysis import SIM_STATUS, LOAD_ITTIME
+from preanalysis import LOAD_ITTIME
 
 """ --- --- SETUP --- --- """
 
@@ -155,13 +155,13 @@ class CYLINDRICAL_GRID:
                 get_int_arr(arr)
     """
 
-    def __init__(self, grid_info):
+    def __init__(self, grid_info=None):
 
-        self.grid_info = grid_info
+        self.grid_info = {'type': 'cyl', 'n_r': 150, 'n_phi': 150, 'n_z': 100}
 
 
 
-        self.grid_type = "cyl"
+        self.grid_type = self.grid_info['type']
 
         # self.carpet_grid = carpet_grid
 
@@ -180,6 +180,10 @@ class CYLINDRICAL_GRID:
         self.y_cyl_3d = self.r_cyl_3d * np.sin(self.phi_cyl_3d)
 
         print("\t GRID: [phi:r:z] = [{}:{}:{}]".format(len(phi_cyl), len(r_cyl), len(z_cyl)))
+
+        print("\t GRID: [x_sph_3d:  ({},{})] {} pints".format(self.x_cyl_3d.min(), self.x_cyl_3d.max(), len(self.x_cyl_3d[:,0,0])))
+        print("\t GRID: [y_sph_3d:  ({},{})] {} pints".format(self.y_cyl_3d.min(), self.y_cyl_3d.max(), len(self.y_cyl_3d[0,:,0])))
+        print("\t GRID: [z_sph_3d:  ({},{})] {} pints".format(self.z_cyl_3d.min(), self.z_cyl_3d.max(), len(self.z_cyl_3d[0,0,:])))
 
         print('-' * 30 + '------DONE-----' + '-' * 30)
         print('\n')
@@ -274,6 +278,165 @@ class CYLINDRICAL_GRID:
         for v_n in self.list_int_grid_v_ns:
             outfile.create_dataset(v_n, data=self.get_int_grid(v_n))
         outfile.close()
+
+
+class SPHERICAL_GRID:
+    """
+        Creates a stretched cylindrical grid and allows
+        to interpolate any data from carpet grid onto it.
+        Stretched means, that the grid consists of 2 parts:
+            1) linear distribution in terms of radius (0-15)
+            2) logarithmic dist. in terms of radius (15-512)
+        Class stores the grid information in its own variables
+        that can be accessed directly or through
+        `get_new_grid(v_n)` method
+
+        Requirements:
+            > dictionary grid_info{} that describes the grid:
+            > class `carpet_grid` from scidata
+        Usage:
+            to access the new grid mesh arrays use:
+                get_new_grid(v_n)
+            to do the interpolation of arr, use
+                get_int_arr(arr)
+    """
+
+    def __init__(self):
+
+        self.grid_info = {'type': 'sph', 'n_r': 200, 'n_phi': 200, 'n_theta': 150}
+
+        self.grid_type = self.grid_info['type']
+
+        # self.carpet_grid = carpet_grid
+
+        self.list_int_grid_v_ns = ["x_sph", "y_sph", "z_sph",
+                                   "r_sph", "phi_sph", "theta_sph",
+                                   "dr_sph", "dphi_sph", "dtheta_sph"]
+
+        print('-' * 25 + 'INITIALIZING SPHERICAL GRID' + '-' * 25)
+
+        phi_sph, r_sph, theta_sph, \
+        self.dphi_sph_3d, self.dr_sph_3d, self.dtheta_sph_3d = self.get_phi_r_theta_grid()
+
+        self.r_sph_3d, self.phi_sph_3d, self.theta_sph_3d \
+            = np.meshgrid(r_sph, phi_sph, theta_sph, indexing='ij')
+        self.x_sph_3d = self.r_sph_3d * np.cos(self.phi_sph_3d) * np.sin(self.theta_sph_3d)
+        self.y_sph_3d = self.r_sph_3d * np.sin(self.phi_sph_3d) * np.sin(self.theta_sph_3d)
+        self.z_sph_3d = self.r_sph_3d * np.cos(self.theta_sph_3d)
+
+        print("\t GRID: [phi_sph:   ({},{})] {} pints".format(phi_sph[0], phi_sph[-1], len(phi_sph)))
+        print("\t GRID: [r_sph:     ({},{})] {} pints".format(r_sph[0], r_sph[-1], len(r_sph), len(r_sph)))
+        print("\t GRID: [theta_sph: ({},{})] {} pints".format(theta_sph[0], theta_sph[-1], len(theta_sph)))
+        print('   --- --- ---   ')
+        print("\t GRID: [x_sph_3d:  ({},{})] {} pints".format(self.x_sph_3d.min(), self.x_sph_3d.max(), len(self.x_sph_3d[:,0,0])))
+        print("\t GRID: [y_sph_3d:  ({},{})] {} pints".format(self.y_sph_3d.min(), self.y_sph_3d.max(), len(self.y_sph_3d[0,:,0])))
+        print("\t GRID: [z_sph_3d:  ({},{})] {} pints".format(self.z_sph_3d.min(), self.z_sph_3d.max(), len(self.z_sph_3d[0,0,:])))
+        # print('   --- --- ---   ')
+        # print("\t GRID: [x_sph_3d:  ({},{})] {} pints".format(self.x_sph_3d[0,0,0], self.x_sph_3d[0,-1,0], len(self.x_sph_3d[0,:,0])))
+        # print("\t GRID: [y_sph_3d:  ({},{})] {} pints".format(self.y_sph_3d[0,0,0], self.y_sph_3d[-1,0,0], len(self.y_sph_3d[:,0,0])))
+        # print("\t GRID: [z_sph_3d:  ({},{})] {} pints".format(self.z_sph_3d[0,0,0], self.z_sph_3d[0,0,-1], len(self.z_sph_3d[0,0,:])))
+
+        print("\t GRID: [phi:r:theta] = [{}:{}:{}]".format(len(phi_sph), len(r_sph), len(theta_sph)))
+
+        print('-' * 30 + '--------DONE-------' + '-' * 30)
+        print('\n')
+
+    # cylindrical grid
+    @staticmethod
+    def make_stretched_grid(x0, x1, x2, nlin, nlog):
+        assert x1 > 0
+        assert x2 > 0
+        x_lin_f = np.linspace(x0, x1, nlin)
+        x_log_f = 10.0 ** np.linspace(log10(x1), log10(x2), nlog)
+        return np.concatenate((x_lin_f, x_log_f))
+
+    def get_phi_r_theta_grid(self):
+
+        # extracting grid info
+        n_r = self.grid_info["n_r"]
+        n_phi = self.grid_info["n_phi"]
+        n_theta = self.grid_info["n_theta"]
+
+        # constracting the grid
+        r_sph_f = self.make_stretched_grid(0., 15., 512., n_r, n_phi)
+        # z_cyl_f = self.make_stretched_grid(0., 15., 512., n_r, n_phi)
+        phi_sph_f = np.linspace(0, 2 * np.pi, n_phi)
+        theta_sph_f = np.linspace(-np.pi / 2, np.pi / 2, n_theta)
+
+        # edges -> bins (cells)
+        r_sph = 0.5 * (r_sph_f[1:] + r_sph_f[:-1])
+        # z_cyl = 0.5 * (z_cyl_f[1:] + z_cyl_f[:-1])
+        phi_sph = 0.5 * (phi_sph_f[1:] + phi_sph_f[:-1])
+        theta_sph = 0.5 * (theta_sph_f[1:] + theta_sph_f[:-1])
+
+        # 1D grind -> 3D grid (to mimic the r, z, phi structure)
+        dr_sph = np.diff(r_sph_f)[:, np.newaxis, np.newaxis]
+        dphi_sph = np.diff(phi_sph_f)[np.newaxis, :, np.newaxis]
+        # dz_cyl = np.diff(z_cyl_f)[np.newaxis, np.newaxis, :]
+        dtheta_sph = np.diff(theta_sph_f)[np.newaxis, np.newaxis, :]
+
+        return phi_sph, r_sph, theta_sph, dphi_sph, dr_sph, dtheta_sph
+
+    # generic methods to be present in all INTERPOLATION CLASSES
+    # def get_int_arr(self, arr_3d):
+    #
+    #     # if not self.x_cyl_3d.shape == arr_3d.shape:
+    #     #     raise ValueError("Passed for interpolation 3d array has wrong shape:\n"
+    #     #                      "{} Expected {}".format(arr_3d.shape, self.x_cyl_3d.shape))
+    #     xi = np.column_stack([self.x_cyl_3d.flatten(),
+    #                           self.y_cyl_3d.flatten(),
+    #                           self.z_cyl_3d.flatten()])
+    #     F = Interpolator(self.carpet_grid, arr_3d, interp=1)
+    #     res_arr_3d = F(xi).reshape(self.x_cyl_3d.shape)
+    #     return res_arr_3d
+
+    def get_xi(self):
+        return np.column_stack([self.x_sph_3d.flatten(),
+                                self.y_sph_3d.flatten(),
+                                self.z_sph_3d.flatten()])
+
+    def get_shape(self):
+        return self.x_sph_3d.shape
+
+    def get_int_grid(self, v_n):
+
+        if v_n == "x_sph":
+            return self.x_sph_3d
+        elif v_n == "y_sph":
+            return self.y_sph_3d
+        elif v_n == "z_sph":
+            return self.z_sph_3d
+        elif v_n == "r_sph":
+            return self.r_sph_3d
+        elif v_n == "phi_sph":
+            return self.phi_sph_3d
+        elif v_n == "theta_sph":
+            return self.theta_sph_3d
+        elif v_n == "dr_sph":
+            return self.dr_sph_3d
+        elif v_n == "dphi_sph":
+            return self.dphi_sph_3d
+        elif v_n == "dtheta_sph":
+            return self.dtheta_sph_3d
+        else:
+            raise NameError("v_n: {} not recogized in grid. Available:{}"
+                            .format(v_n, self.list_int_grid_v_ns))
+
+    def save_grid(self, sim):
+
+        grid_type = self.grid_type
+
+        path = Paths.ppr_sims + sim + "/res_3d/"
+        outfile = h5py.File(path + str(self.grid_type) + "_grid.h5", "w")
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # print("Saving grid...")
+        for v_n in self.list_int_grid_v_ns:
+            outfile.create_dataset(v_n, data=self.get_int_grid(v_n))
+        outfile.close()
+
 
 class CARTESIAN_GRID:
     """
@@ -391,6 +554,7 @@ class CARTESIAN_GRID:
         for v_n in self.list_int_grid_v_ns:
             outfile.create_dataset(v_n, data=self.get_int_grid(v_n))
         outfile.close()
+
 
 class FORMULAS:
 
@@ -534,6 +698,7 @@ class FORMULAS:
             raise ValueError("slice:{} not recognized. Use 'xy', 'yz' or 'xz' to get a slice")
         return res
 
+
 class SAVE_RESULT:
 
     def __init__(self):
@@ -585,7 +750,7 @@ class LOAD_PROFILE(LOAD_ITTIME):
                 raise IOError("ittime.h5 says there ae no profiles, and no 3D data found.")
 
         self.list_iterations = list(itprofs)
-        self.list_times = itprofs
+        self.list_times = timeprofs
 
         self.list_prof_v_ns = [
                              "rho", "w_lorentz", "vol",  # basic
@@ -1083,19 +1248,25 @@ class MAINMETHODS_STORE(MASK_STORE):
         self.corr_task_dic_temp_ye = [
             # {"v_n": "rho",  "edges": 10.0 ** np.linspace(4.0, 16.0, 500) / rho_const},  # not in CGS :^
             {"v_n": "temp", "edges": 10.0 ** np.linspace(-2, 2, 300)},
-            {"v_n": "Ye",   "edges": np.linspace(0, 0.5, 300)}
+            {"v_n": "Ye",   "edges": np.linspace(0, 0.5, 500)}
         ]
 
         self.corr_task_dic_rho_ye = [
             # {"v_n": "temp", "edges": 10.0 ** np.linspace(-2, 2, 300)},
             {"v_n": "rho",  "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
-            {"v_n": "Ye",   "edges": np.linspace(0, 0.5, 300)}
+            {"v_n": "Ye",   "edges": np.linspace(0, 0.5, 500)}
         ]
 
         self.corr_task_dic_rho_theta = [
             {"v_n": "rho", "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
-            {"v_n": "theta", "edges": np.linspace(0, 0.5*np.pi, 300)}
+            {"v_n": "theta", "edges": np.linspace(0, 0.5*np.pi, 500)}
         ]
+
+        self.corr_task_dic_velz_theta = [
+            {"v_n": "velz", "edges": np.linspace(-1., 1., 500)},  # not in CGS :^
+            {"v_n": "theta", "edges": np.linspace(0, 0.5*np.pi, 500)}
+        ]
+
 
         self.corr_task_dic_rho_r = [
             {"v_n": "rho", "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
@@ -1104,22 +1275,22 @@ class MAINMETHODS_STORE(MASK_STORE):
 
         self.corr_task_dic_rho_ang_mom = [
             {"v_n": "rho", "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
-            {"v_n": "ang_mom", "points": 300, "scale": "log", "min":1e-9} # find min, max yourself
+            {"v_n": "ang_mom", "points": 500, "scale": "log", "min":1e-9} # find min, max yourself
         ]
 
         self.corr_task_dic_rho_ang_mom_flux = [
             {"v_n": "rho", "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
-            {"v_n": "ang_mom_flux", "points": 300, "scale": "log", "min":1e-12}
+            {"v_n": "ang_mom_flux", "points": 500, "scale": "log", "min":1e-12}
         ]
 
         self.corr_task_dic_rho_dens_unb_bern = [
             {"v_n": "rho", "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
-            {"v_n": "dens_unb_bern", "edges": 10.0 ** np.linspace(-12., -6., 300)}
+            {"v_n": "dens_unb_bern", "edges": 10.0 ** np.linspace(-12., -6., 500)}
         ]
 
         self.corr_task_dic_rho_dens_unb_bern = [
             {"v_n": "rho", "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
-            {"v_n": "dens_unb_bern", "edges": 10.0 ** np.linspace(-12., -6., 300)}
+            {"v_n": "dens_unb_bern", "edges": 10.0 ** np.linspace(-12., -6., 500)}
         ]
 
         self.corr_task_dic_velz_dens_unb_bern = [
@@ -1151,7 +1322,7 @@ class MAINMETHODS_STORE(MASK_STORE):
 
         self.corr_task_dic_r_phi_ang_mom_flux = [
             {"v_n": "r", "edges": np.linspace(0, 100, 50)},
-            {"v_n": "phi", "edges": np.linspace(-np.pi, np.pi, 300)},
+            {"v_n": "phi", "edges": np.linspace(-np.pi, np.pi, 500)},
             {"v_n": "ang_mom_flux", "points": 500, "scale": "log", "min": 1e-12}
         ]
 
@@ -1162,7 +1333,7 @@ class MAINMETHODS_STORE(MASK_STORE):
         do_save = False
 
         if not os.path.isdir(Paths.ppr_sims + sim + "/res_3d/") and save:
-            os.mkdir(Paths.ppr_sims + self.sim + "/res_3d/")
+            os.mkdir(Paths.ppr_sims + sim + "/res_3d/")
             do_compute = True
             do_save = True
         elif not os.path.isdir(Paths.ppr_sims + sim + "/res_3d/") and not save:
@@ -1240,6 +1411,10 @@ class MAINMETHODS_STORE(MASK_STORE):
                 data = -1. * self.get_masked_data(it, rl, v_n)
             else:
                 data = self.get_masked_data(it, rl, v_n)
+            if len(data) == 0:
+                raise ValueError("len(data)=0 for it:{} rl:{} v_n:{}"
+                                 .format(it, rl, v_n))
+
             min_.append(data.min())
             max_.append(data.max())
         min_ = np.array(min_)
@@ -1489,7 +1664,7 @@ class MAINMETHODS_STORE(MASK_STORE):
                 ycs.append(yc)
 
                 # Extract modes
-                times.append(self.get_time_for_it(it, d1d2d3="d1"))
+                times.append(self.get_time_for_it(it, d1d2d3prof="prof"))
                 for m in range(1, mmax + 1):
                     modes[m].append(dxyz * ne.evaluate("sum(rho * w_lorentz * vol * exp(-1j * m * phi))"))
 
@@ -1594,9 +1769,6 @@ class INTERPOLATE_STORE(MAINMETHODS_STORE):
             else:
                 self.do_interpolate(it, v_n)
 
-
-
-
     def get_int(self, it, v_n):
         self.check_it(it)
         self.check_int_v_n(v_n)
@@ -1619,6 +1791,10 @@ class INTMETHODS_STORE(INTERPOLATE_STORE):
             os.makedirs(Paths.ppr_sims + self.sim + "/res_3d/")
 
         path = Paths.ppr_sims + self.sim + "/res_3d/" + str(it) + '/'
+
+        if os.path.isfile(path + grid_type + '_grid.h5'):
+            os.remove(path + grid_type + '_grid.h5')
+
         outfile = h5py.File(path + grid_type + '_grid.h5', "w")
 
         if not os.path.exists(path):
@@ -2496,12 +2672,12 @@ class LOAD_RES_CORR(LOAD_ITTIME):
         # self.times = interpoate_time_form_it(self.list_iterations, Paths.gw170817+sim+'/')
         self.times = []
         for it in self.list_iterations:
-            self.times.append(self.get_time_for_it(it))
+            self.times.append(self.get_time_for_it(it, d1d2d3prof="prof"))
         self.times = np.array(self.times)
 
         self.list_corr_v_ns = ["temp", "Ye", "rho", "theta", "r", "phi",
                                "ang_mom", "ang_mom_flux", "dens_unb_bern",
-                               "inv_ang_mom_flux", 'vr'
+                               "inv_ang_mom_flux", 'vr', 'velz', 'vely', 'velx'
                                ]
 
         self.corr_matrix = [[np.zeros(0,)
@@ -2805,27 +2981,34 @@ class LOAD_RES_CORR(LOAD_ITTIME):
 
         # exit(1)
 
-class LOAD_INT_DATA:
+class LOAD_INT_DATA(LOAD_ITTIME):
 
-    def __init__(self, sim):
+    def __init__(self, sim, grid_object):
+        print("Warning. LOAD_INT_DATA is using only the '.grid_type' and '.list_int_grid_v_ns'\n"
+              " It does not use the grid itself. Instead it loads the 'grid_type'_grid.h5 file")
+
+        LOAD_ITTIME.__init__(self, sim)
 
         self.sim = sim
 
         self.list_iterations = list(get_list_iterationsfrom_res_3d(sim))
-        self.times = interpoate_time_form_it(self.list_iterations, Paths.gw170817 + sim + '/')
-
-
-
+        self.times = []
+        for it in self.list_iterations:
+            self.times.append(self.get_time_for_it(it, d1d2d3prof="prof"))
+        self.times = np.array(self.times)
 
         # GRID
-        self.grid_type = "cyl"
-        self.list_grid_v_ns = ["x_cyl", "y_cyl", "z_cyl",
-                          "r_cyl", "phi_cyl",
-                          "dr_cyl", "dphi_cyl", "dz_cyl"]
+        self.grid_type = grid_object.grid_type
+        self.list_grid_v_ns = grid_object.list_int_grid_v_ns
+        # self.list_grid_v_ns = ["x_cyl", "y_cyl", "z_cyl",
+        #                       "r_cyl", "phi_cyl",
+        #                       "dr_cyl", "dphi_cyl", "dz_cyl"]
 
         # for overriding the search for a grid.h5 in every iteration folder
         self.flag_force_unique_grid = False
-        self.it_for_unique_grid = get_it_from_itdir(find_itdir_with_grid(sim, "cyl_grid.h5"))
+        self.it_for_unique_grid = \
+            get_it_from_itdir(find_itdir_with_grid(sim, "{}_grid.h5"
+                                                   .format(grid_object.grid_type)))
 
         self.grid_data_matrix = [[np.zeros(0)
                                  for x in range(len(self.list_grid_v_ns))]
@@ -2872,6 +3055,7 @@ class LOAD_INT_DATA:
 
         path = Paths.ppr_sims + self.sim + "/res_3d/" + str(int(it)) + '/'
         fname = path + self.grid_type + '_grid.h5'
+        print("\tloading grid: {}".format(fname))
         grid_file = h5py.File(fname, "r")
         # print(grid_file)
         for v_n in self.list_grid_v_ns:
@@ -2887,7 +3071,6 @@ class LOAD_INT_DATA:
         path = Paths.ppr_sims + self.sim + "/res_3d/" + str(int(it)) + '/'
         fname = path + self.grid_type + '_' + v_n + ".h5"
         data_file = h5py.File(fname, "r")
-
         if len(data_file) > 1:
             raise IOError("More than one v_n is found in data_file: {}".format(fname))
         if len(data_file) == 0:
@@ -2959,9 +3142,9 @@ class LOAD_INT_DATA:
 
 class ADD_METHODS_FOR_INT_DATA(LOAD_INT_DATA):
 
-    def __init__(self, sim):
+    def __init__(self, sim, grid_object):
 
-        LOAD_INT_DATA.__init__(self, sim)
+        LOAD_INT_DATA.__init__(self, sim, grid_object)
 
     def ingeg_over_z(self, it, z3d_arr):
         dz = self.get_grid_data(it, "dz_cyl")
@@ -3261,7 +3444,7 @@ class LOAD_PROFILE_XYXZ(LOAD_ITTIME):
         # self.times = interpoate_time_form_it(self.list_iterations, Paths.gw170817+sim+'/')
         self.times = []
         for it in self.list_iterations:
-            self.times.append(self.get_time_for_it(it))
+            self.times.append(self.get_time_for_it(it, d1d2d3prof="prof"))
         self.times = np.array(self.times)
 
         self.list_v_ns = ["x", "y", "z", "rho", "w_lorentz", "vol", "press", "eps", "lapse", "velx", "vely", "velz",
@@ -4162,7 +4345,7 @@ def do_histogram_processing_of_iterations():
     print("sim: {} histograms computed.\nDone.".format(sim))
     exit(1)
 
-def do_produce_interpolated_data_for_iterations():
+def old_do_produce_interpolated_data_for_iterations():
     """
     For all iterations (looks into the folders inside res_3d/ for list of them
     :return:
@@ -4212,6 +4395,115 @@ def do_produce_interpolated_data_for_iterations():
 
     print("All done")
     exit(0)
+
+def do_produce_interpolated_data_for_iterations():
+    """
+    For all iterations (looks into the folders inside res_3d/ for list of them
+    :return:
+    """
+
+    symmetry = None #"pi"
+    sim = "DD2_M13641364_M0_LK_SR_R04"
+    v_ns = ["density"]
+    o_grid = CYLINDRICAL_GRID()
+    o_grid = SPHERICAL_GRID()
+    # exit(1)
+    o_int = INTMETHODS_STORE(sim, grid_object=o_grid, symmetry=symmetry)
+
+    times = [0]#o_int.list_times
+    iterations = [2213326]#o_int.list_iterations
+
+    n = 1
+    for t, it in zip(times, iterations):
+        print("it:{:d} t:{:.1f}ms ({}/{})"
+              .format(int(it), t*1e3, n, len(iterations)))
+        for v_n in v_ns:
+            # print("  interpolating {} onto {} grid"
+            #       .format(v_n, o_grid.grid_type))
+            o_int.save_int_v_n(it=it, v_n=v_n, overwrite=True)
+        if n == 1:
+            print("  saving {} grid "
+                  .format(o_grid.grid_type))
+            o_int.save_new_grid(it)
+        n = n+1
+
+    print("All done")
+    # exit(0)
+
+def do_plot_r_theta_summed_over_phi_interpolated_data():
+
+    it = 2213326
+    sim = "DD2_M13641364_M0_LK_SR_R04"
+    v_n = "density"
+    o_grid = SPHERICAL_GRID()
+    o_data = LOAD_INT_DATA("DD2_M13641364_M0_LK_SR_R04", o_grid)
+    o_data.flag_force_unique_grid = True
+
+    r_req = 20 #[Msun]
+
+    r = o_data.get_grid_data(it, "r_sph")
+    # phi = o_data.get_grid_data(it, "phi_sph")[0, :, 0]
+    # theta = o_data.get_grid_data(it, "theta_sph")[0, 0, :]
+    # print('r', r)
+
+    idx = find_nearest_index(r[:, 0, 0], r_req)
+    # print('index of r_int', idx)
+
+    # r = o_data.get_grid_data(it, "r_sph")[:, 0, 0]
+    phi = o_data.get_grid_data(it, "phi_sph")
+    theta = o_data.get_grid_data(it, "theta_sph")
+    arr = o_data.get_int_data(it, v_n)
+
+    print("phi [{}, {}] shape:{}".format(phi[0, :, 0].min(),
+                                         phi[0, :, 0].max(),
+                                         len(phi[0, :, 0])))
+
+    print("r [{}, {}] shape:{}".format(r[:, 0, 0].min(),
+                                         r[:, 0, 0].max(),
+                                         len(r[:, 0, 0])))
+
+    print("theta [{}, {}] shape:{}".format(theta[0, 0, :].min(),
+                                         theta[0, 0, :].max(),
+                                         len(theta[0, 0, :])))
+
+    # assert len(phi[:, 0, 0]) == len(arr[0, 0, :])
+    # assert len(r[0, :, 0]) == len(arr[0, :, 0])
+    # assert len(theta[0, 0,: ]) == len(arr[0, 0, :])
+
+    print(arr[idx, :, :].T)
+
+    from matplotlib import colors
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    norm = colors.LogNorm(vmin=1e-10, vmax=1e-5)
+    # norm = colors.Normalize(vmin=0.05, vmax=0.5)
+    im = ax.pcolormesh(phi[idx, :, 0], theta[idx, 0, :], arr[idx, :, :].T, norm=norm, cmap="inferno_r")
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    fig.colorbar(im, cax=cax, orientation='vertical')
+    ax.set_xlabel("phi")
+    ax.set_ylabel("theta")
+    ax.minorticks_on()
+    plt.title(r"{} map at r={}".format(v_n, r_req))
+    plt.savefig('{}'.format(Paths.plots + "sph_int_test.png"), bbox_inches='tight', dpi=128)
+    print("saved pi_test2.png")
+    plt.close()
+
+    # total mass
+    dr = o_data.get_grid_data(it, "dr_sph")
+    dtheta = o_data.get_grid_data(it, "dtheta_sph")
+    dphi = o_data.get_grid_data(it, "dphi_sph")
+
+    _m = np.sum(arr * (r ** 2) * dr, axis=0)
+    __m = np.sum(_m * np.sin(phi[0, :, :]) * dphi[0, :, :], axis=0)
+    ___m = np.sum(__m * dtheta[0,0,:])
+    print(___m)
+
+
+    # m = 2 * np.sum(np.sum(np.sum(arr * r ** 2 * dr, axis=0) * np.sin(phi[0, :, :]) * dphi[0, :, :], axis=1) * dtheta[0,0,:])
+    # print(m)
+
+    exit(1)
 
 def do_compute_save_all_modes_for_all_it():
 
@@ -4847,7 +5139,9 @@ def compute_density_modes_from_profiles():
 if __name__ == "__main__":
 
     ''' debug '''
-    profs = LOAD_PROFILE("SFHo_M14521283_M0_LK_HR")
+    # do_produce_interpolated_data_for_iterations()
+    do_plot_r_theta_summed_over_phi_interpolated_data()
+    # profs = LOAD_PROFILE("SFHo_M14521283_M0_LK_HR")
 
     # print(profs.get_profile_dfile(704512))
     # print(profs.get_group(704512, 0))

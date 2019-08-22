@@ -45,7 +45,8 @@ from units import time_constant, volume_constant, energy_constant
 from math import pi, log10
 import time
 
-from d1analysis import LOAD_ITTIME
+from preanalysis import LOAD_ITTIME
+
 
 class LOAD_STORE_DATASETS(LOAD_ITTIME):
     """
@@ -463,6 +464,7 @@ class EXTRACT_STORE_DATA(LOAD_STORE_DATASETS):
     # def get_time_(self, it):
     #     return self.get_time__(it)
 
+
 class EXTRACT_FOR_RL(EXTRACT_STORE_DATA):
 
     def __init__(self, sim):
@@ -603,6 +605,7 @@ class COMPUTE_STORE(EXTRACT_FOR_RL):
     def __init__(self, sim):
         EXTRACT_FOR_RL.__init__(self, sim)
 
+
 class MASK_STORE(COMPUTE_STORE):
 
     def __init__(self, fname):
@@ -674,6 +677,7 @@ class MASK_STORE(COMPUTE_STORE):
                                  for x in range(self.nlevels)]
                                  for y in range(len(self.list_all_v_ns))]
         instance.mask_matrix = [np.ones(0, dtype=bool) for x in range(self.nlevels)]
+
 
 class CYLINDRICAL_GRID:
     """
@@ -1054,7 +1058,6 @@ class INTERPOLATE_STORE_2D(EXTRACT_STORE_DATA):
 
     # def get_time(self, it):
     #     return self.get_time_(it)
-
 
 """ --- --- --- """
 

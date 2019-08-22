@@ -82,11 +82,11 @@ class PRINT_SIM_STATUS(LOAD_ITTIME):
         print("\tAsserting output contnet:")
         self.print_assert_tarball_content()
         print("\tAsserting data availability: ")
-        
+
         tstart, tend = self.get_overall_tstart_tend()
         Printcolor.green("\tOverall Data span: {:.1f} to {:.1f} [ms]"
                          .format(tstart-1, tend-1))
-        
+
         self.print_timemarks_output(start=tstart, stop=tend, tstep=tstep, precision=0.5)
         self.print_timemarks(start=tstart, stop=tend, tstep=tstep, tmark=10., comma=False)
         self.print_ititme_status("overall", d1d2d3prof="d1", start=tstart, stop=tend, tstep=tstep, precision=prec)
@@ -863,185 +863,185 @@ class PRINT_SIM_PPR_STATUS(LOAD_ITTIME):
     #     status, missing = \
     #         self.print_assert_data_status("movies D2", dir, flist, comma=False)
 
-
-class SIM_PPR_STATUS:
-
-    def __init__(self, sim):
-        self.sim = sim
-        # LOAD_ITTIME.__init__(self, sim)
-        self.res_3d_itdirs = get_list_iterationsfrom_res_3d(self.sim)
-
-    def __assert_content(self, dir, expected_files):
-        """
-        If all files are found:  return "full", []
-        else:                    return "partial", [missing files]
-        or  :                    return "empty",   [missing files]
-        :param expected_files:
-        :param dir:
-        :return:
-        """
-        status = "full"
-        missing_files = []
-
-        assert os.path.isdir(dir)
-
-        for file_ in expected_files:
-            if os.path.isfile(dir + file_):
-                pass
-            else:
-                status = "partial"
-                missing_files.append(file_)
-        if len(missing_files) == len(expected_files):
-            status = "empty"
-
-        return status, missing_files
-
-    def assert_collated_data(self):
-
-        flist = copy.deepcopy(LOAD_FILES.list_collated_files)
-
-        collated_status, collated_missing = \
-            self.__assert_content(Paths.ppr_sims + self.sim + '/collated/',
-                                  flist)
-
-        return collated_status, collated_missing
-
-    def assert_outflowed_data(self, criterion):
-
-        flist = copy.deepcopy(LOAD_FILES.list_outflowed_files)
-        if not criterion.__contains__("_b"):
-            # if the criterion is not Bernoulli
-            flist.remove("hist_vel_inf_bern.dat")
-            flist.remove("ejecta_profile_bern.dat")
-
-        outflow_status, outflow_missing = \
-            self.__assert_content(Paths.ppr_sims + self.sim + "/outflow{}/".format(criterion),
-                                  flist)
-
-        return outflow_status, outflow_missing
-
-    def assert_outflowed_corr_data(self, criterion):
-
-        flist = copy.deepcopy(LOAD_FILES.list_of_outflowed_h5_files)
-        if not criterion.__contains__("_b"):
-            # if the criterion is not Bernoulli
-            flist.remove("corr_vel_inf_bern_theta.h5")
-
-        outflow_status, outflow_missing = \
-            self.__assert_content(Paths.ppr_sims + self.sim + "/outflow{}/".format(criterion),
-                                  flist)
-
-        return outflow_status, outflow_missing
-
-    def assert_gw_data(self):
-
-        flist = copy.deepcopy(LOAD_FILES.list_gw_files)
-
-        gw_status, gw_missing = \
-            self.__assert_content(Paths.ppr_sims + self.sim + '/waveforms/',
-                                  flist)
-
-        return gw_status, gw_missing
-
-    def assert_mkn_data(self, criterion):
-
-        flist = copy.deepcopy(LOAD_FILES.list_mkn_files)
-        # flist.remove("AT2017gfo.h5")
-
-        mkn_status, mkn_missing = \
-            self.__assert_content(Paths.ppr_sims + self.sim + "/outflow{}/".format(criterion),
-                                  flist)
-
-        return mkn_status, mkn_missing
-
-    # ---
-
-    def assert_d1_plots(self, criterion="_0", dir="res_1d/", res=".png"):
-
-        flist = [plot_+res for plot_ in __d1plots__]
-
-        plot_status, missing_plots = \
-            self.__assert_content(Paths.ppr_sims+self.sim+'/'+dir,
-                                  flist)
-
-        return plot_status, missing_plots
-
-    def assert_d2_movies(self, dir="res_2d/", res=".mp4"):
-
-        flist = [v_n + "_movie/" + v_n + res for v_n in __d2movievns__]
-
-        movie_status, missing_movies = \
-            self.__assert_content(Paths.ppr_sims+self.sim+'/'+dir,
-                                  flist)
-
-        return movie_status, missing_movies
-
-    def assert_d3_dmass(self, dir="res_3d/", res=".txt"):
-
-        flist = [str(int(itdir)) + '/' + __d3dmass__[0] + res
-                 for itdir in self.res_3d_itdirs]
-
-        dmass_status, dmass_missing = self.__assert_content(Paths.ppr_sims + self.sim + '/' + dir,
-                                                            flist)
-
-        return dmass_status, dmass_missing
-
-    def assert_d3_corrs(self, dir="res_3d/", intro="corr_", res=".h5"):
-
-        flist = []
-        for it in self.res_3d_itdirs:
-            for v_n in __d3corrs__:
-                flist.append(str(int(it))+'/'+intro+v_n+res)
-
-        corr_status, corr_missing = self.__assert_content(Paths.ppr_sims + self.sim + '/' + dir,
-                                                            flist)
-
-        return corr_status, corr_missing
-
-    def assert_d3_corr_plots(self, dir="res_3d/", res=".png"):
-
-        flist = []
-        for it in self.res_3d_itdirs:
-            for v_n in __d3corrs__:
-                flist.append(str(int(it)) + '/' + v_n + res)
-
-        corr_plot_status, corr_plot_missing = self.__assert_content(Paths.ppr_sims + self.sim + '/' + dir,
-                                                          flist)
-
-        return corr_plot_status, corr_plot_missing
-
-    def assert_d3_slices(self, dir="res_3d/", intro="profile.", res=".h5"):
-
-        flist = []
-        for it in self.res_3d_itdirs:
-            for plane in __d3slicesplanes__:
-                flist.append(str(int(it)) + '/' + intro + plane + res)
-
-        slices_status, slices_missing = self.__assert_content(Paths.ppr_sims + self.sim + '/' + dir,
-                                                                    flist)
-
-        return slices_status, slices_missing
-
-    def assert_d3_densmodes(self, dir="res_3d/", res=".h5"):
-
-        flist = [file_+res for file_ in __d3dm__]
-
-        dm_status, dm_missing = self.__assert_content(Paths.ppr_sims+self.sim+'/'+dir,
-                                                      flist)
-
-        return dm_status, dm_missing
-
-    def assert_d3_slice_plots(self, dir="res_3d", ddir = "slices/", rl=0, res=".png"):
-
-        flist = []
-        for it in self.res_3d_itdirs:
-            for v_n in __d3sliceplotvns__:
-                flist.append(str(int(it)) + '/' + ddir + v_n + "_rl" + str(rl) + res)
-
-        slices_plots_status, slices_plots_missing = self.__assert_content(Paths.ppr_sims + self.sim + '/' + dir,
-                                                              flist)
-
-        return slices_plots_status, slices_plots_missing
+#
+# class SIM_PPR_STATUS:
+#
+#     def __init__(self, sim):
+#         self.sim = sim
+#         # LOAD_ITTIME.__init__(self, sim)
+#         self.res_3d_itdirs = get_list_iterationsfrom_res_3d(self.sim)
+#
+#     def __assert_content(self, dir, expected_files):
+#         """
+#         If all files are found:  return "full", []
+#         else:                    return "partial", [missing files]
+#         or  :                    return "empty",   [missing files]
+#         :param expected_files:
+#         :param dir:
+#         :return:
+#         """
+#         status = "full"
+#         missing_files = []
+#
+#         assert os.path.isdir(dir)
+#
+#         for file_ in expected_files:
+#             if os.path.isfile(dir + file_):
+#                 pass
+#             else:
+#                 status = "partial"
+#                 missing_files.append(file_)
+#         if len(missing_files) == len(expected_files):
+#             status = "empty"
+#
+#         return status, missing_files
+#
+#     def assert_collated_data(self):
+#
+#         flist = copy.deepcopy(LOAD_FILES.list_collated_files)
+#
+#         collated_status, collated_missing = \
+#             self.__assert_content(Paths.ppr_sims + self.sim + '/collated/',
+#                                   flist)
+#
+#         return collated_status, collated_missing
+#
+#     def assert_outflowed_data(self, criterion):
+#
+#         flist = copy.deepcopy(LOAD_FILES.list_outflowed_files)
+#         if not criterion.__contains__("_b"):
+#             # if the criterion is not Bernoulli
+#             flist.remove("hist_vel_inf_bern.dat")
+#             flist.remove("ejecta_profile_bern.dat")
+#
+#         outflow_status, outflow_missing = \
+#             self.__assert_content(Paths.ppr_sims + self.sim + "/outflow{}/".format(criterion),
+#                                   flist)
+#
+#         return outflow_status, outflow_missing
+#
+#     def assert_outflowed_corr_data(self, criterion):
+#
+#         flist = copy.deepcopy(LOAD_FILES.list_of_outflowed_h5_files)
+#         if not criterion.__contains__("_b"):
+#             # if the criterion is not Bernoulli
+#             flist.remove("corr_vel_inf_bern_theta.h5")
+#
+#         outflow_status, outflow_missing = \
+#             self.__assert_content(Paths.ppr_sims + self.sim + "/outflow{}/".format(criterion),
+#                                   flist)
+#
+#         return outflow_status, outflow_missing
+#
+#     def assert_gw_data(self):
+#
+#         flist = copy.deepcopy(LOAD_FILES.list_gw_files)
+#
+#         gw_status, gw_missing = \
+#             self.__assert_content(Paths.ppr_sims + self.sim + '/waveforms/',
+#                                   flist)
+#
+#         return gw_status, gw_missing
+#
+#     def assert_mkn_data(self, criterion):
+#
+#         flist = copy.deepcopy(LOAD_FILES.list_mkn_files)
+#         # flist.remove("AT2017gfo.h5")
+#
+#         mkn_status, mkn_missing = \
+#             self.__assert_content(Paths.ppr_sims + self.sim + "/outflow{}/".format(criterion),
+#                                   flist)
+#
+#         return mkn_status, mkn_missing
+#
+#     # ---
+#
+#     def assert_d1_plots(self, criterion="_0", dir="res_1d/", res=".png"):
+#
+#         flist = [plot_+res for plot_ in __d1plots__]
+#
+#         plot_status, missing_plots = \
+#             self.__assert_content(Paths.ppr_sims+self.sim+'/'+dir,
+#                                   flist)
+#
+#         return plot_status, missing_plots
+#
+#     def assert_d2_movies(self, dir="res_2d/", res=".mp4"):
+#
+#         flist = [v_n + "_movie/" + v_n + res for v_n in __d2movievns__]
+#
+#         movie_status, missing_movies = \
+#             self.__assert_content(Paths.ppr_sims+self.sim+'/'+dir,
+#                                   flist)
+#
+#         return movie_status, missing_movies
+#
+#     def assert_d3_dmass(self, dir="res_3d/", res=".txt"):
+#
+#         flist = [str(int(itdir)) + '/' + __d3dmass__[0] + res
+#                  for itdir in self.res_3d_itdirs]
+#
+#         dmass_status, dmass_missing = self.__assert_content(Paths.ppr_sims + self.sim + '/' + dir,
+#                                                             flist)
+#
+#         return dmass_status, dmass_missing
+#
+#     def assert_d3_corrs(self, dir="res_3d/", intro="corr_", res=".h5"):
+#
+#         flist = []
+#         for it in self.res_3d_itdirs:
+#             for v_n in __d3corrs__:
+#                 flist.append(str(int(it))+'/'+intro+v_n+res)
+#
+#         corr_status, corr_missing = self.__assert_content(Paths.ppr_sims + self.sim + '/' + dir,
+#                                                             flist)
+#
+#         return corr_status, corr_missing
+#
+#     def assert_d3_corr_plots(self, dir="res_3d/", res=".png"):
+#
+#         flist = []
+#         for it in self.res_3d_itdirs:
+#             for v_n in __d3corrs__:
+#                 flist.append(str(int(it)) + '/' + v_n + res)
+#
+#         corr_plot_status, corr_plot_missing = self.__assert_content(Paths.ppr_sims + self.sim + '/' + dir,
+#                                                           flist)
+#
+#         return corr_plot_status, corr_plot_missing
+#
+#     def assert_d3_slices(self, dir="res_3d/", intro="profile.", res=".h5"):
+#
+#         flist = []
+#         for it in self.res_3d_itdirs:
+#             for plane in __d3slicesplanes__:
+#                 flist.append(str(int(it)) + '/' + intro + plane + res)
+#
+#         slices_status, slices_missing = self.__assert_content(Paths.ppr_sims + self.sim + '/' + dir,
+#                                                                     flist)
+#
+#         return slices_status, slices_missing
+#
+#     def assert_d3_densmodes(self, dir="res_3d/", res=".h5"):
+#
+#         flist = [file_+res for file_ in __d3dm__]
+#
+#         dm_status, dm_missing = self.__assert_content(Paths.ppr_sims+self.sim+'/'+dir,
+#                                                       flist)
+#
+#         return dm_status, dm_missing
+#
+#     def assert_d3_slice_plots(self, dir="res_3d", ddir = "slices/", rl=0, res=".png"):
+#
+#         flist = []
+#         for it in self.res_3d_itdirs:
+#             for v_n in __d3sliceplotvns__:
+#                 flist.append(str(int(it)) + '/' + ddir + v_n + "_rl" + str(rl) + res)
+#
+#         slices_plots_status, slices_plots_missing = self.__assert_content(Paths.ppr_sims + self.sim + '/' + dir,
+#                                                               flist)
+#
+#         return slices_plots_status, slices_plots_missing
 
 
 

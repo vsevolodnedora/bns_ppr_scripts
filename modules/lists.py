@@ -5,9 +5,10 @@ class Paths:
 
     scripts  =  '/data01/numrel/vsevolod.nedora/scripts_server/'
     ppr_sims =  '/data01/numrel/vsevolod.nedora/postprocessed3/'
-    lorene =    '/data01/numrel/vsevolod.nedora/Data/Lorene/'
+    lorene =    '/data/numrel/Lorene/Lorene_TABEOS/GW170817/'
+    # lorene =    '/data01/numrel/vsevolod.nedora/Data/Lorene/'
     TOVs =      '/data01/numrel/vsevolod.nedora/Data/TOVs/'
-    gw170817 =   '/data1/numrel/WhiskyTHC/Backup/2018/SLy4_M130130_SR_physics/' # '/data1/numrel/WhiskyTHC/Backup/2018/GW170817/' # "/data01/numrel/vsevolod.nedora/tmp/" # '/data1/numrel/WhiskyTHC/Backup/2018/SLy4_M130130_SR_physics/'
+    gw170817 =   '/data1/numrel/WhiskyTHC/Backup/2018/GW170817/' # "/data01/numrel/vsevolod.nedora/tmp/" # '/data1/numrel/WhiskyTHC/Backup/2018/SLy4_M130130_SR_physics/'
     skynet =    '/data01/numrel/vsevolod.nedora/Data/skynet/'
     output =    '/data01/numrel/vsevolod.nedora/output/'
     plots =     '/data01/numrel/vsevolod.nedora/figs/'
@@ -17,13 +18,13 @@ class Paths:
 
 class Lists:
 
-    dd2_sim_list = [
-        "DD2_M13641364_M0_LK_SR_R04",
-        "DD2_M13641364_M0_SR",
+    chosen_sims = [
+        "DD2_M13641364_M0_SR"
+        "DD2_M13641364_M0_LK_SR_R04"
     ]
 
 
-    eos = ["DD2", "LS220", "SFHo", "SLy4"]
+    eos = ["DD2", "LS220", "SFHo", "SLy4", "BLh"]
     res = ["VLR", "LR", "SR", "HR"]
     neut= ["M0", "M1"]
     visc= ["LK"]

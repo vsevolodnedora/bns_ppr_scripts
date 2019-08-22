@@ -1639,16 +1639,18 @@ def plot_dd2_mkn_colorplot():
     print("\n Plotting dd2_mkn_colorplot ")
 
     o_plot = PLOT_MANY_TASKS()
-    o_plot.gen_set["figdir"] = Paths.plots + '/combine_test/'
+    o_plot.gen_set["figdir"] = Paths.plots #+# #'/combine_test/'
     o_plot.gen_set["type"] = "cartesian"
     o_plot.gen_set["figsize"] = (9.0, 6.3)  # <->, |] # to match hists with (8.5, 2.7)
-    o_plot.gen_set["figname"] = "mkn_dd2_band.pdf"
+    o_plot.gen_set["figname"] = "mkn2pluscomp.png"
+    o_plot.gen_set["dpi"] = 512
     o_plot.gen_set["sharex"] = False
     o_plot.gen_set["sharey"] = False
     o_plot.gen_set["subplots_adjust_h"] = 0.3
     o_plot.gen_set["subplots_adjust_w"] = 0.0
     o_plot.set_plot_dics = []
-
+    fontsize = 16
+    labelsize = 16
 
     bands = ['g', 'z', 'Ks']
     plots = [1, 2, 3]
@@ -1656,6 +1658,32 @@ def plot_dd2_mkn_colorplot():
     sim = "LS220_M13641364_M0_LK_SR"
     data = COMBINE_LIGHTCURVES(sim)
 
+    ### Dyn
+    for band, n in zip(bands, plots):
+        model = {
+            'task': 'mkn median', "ptype": "cartesian",
+            'position': (1, n),
+            'data': data, 'band': band, 'obs': False, 'fname': 'mkn_model1.h5',
+            'v_n_x': 'time', 'v_n_y': 'mag',
+            'color': 'blue', 'ls': ':', 'lw': 1., 'ds': 'default', 'alpha': 0.7,
+            'ymin': 25, 'ymax': 15, 'xmin': 3e-1, 'xmax': 3e1,
+            'xlabel': r"time [days]", 'ylabel': r"AB magnitude at 40 Mpc",
+            'label': "LS220 1c", 'xscale': 'log',
+            'fancyticks': True, 'minorticks': True,
+            'sharey': False,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+            'legend': {}#{'loc': 'best', 'ncol': 2, 'fontsize': 18}
+        }
+
+        if n != plots[-1]:
+            model['label'] = None
+
+        if n != 1:
+            model['sharey'] = True
+
+        o_plot.set_plot_dics.append(model)
+    ### Dyn + Wdin
     for band, n in zip(bands, plots):
         model = {
             'task': 'mkn median', "ptype": "cartesian",
@@ -1668,8 +1696,8 @@ def plot_dd2_mkn_colorplot():
             'label': "LS220", 'xscale': 'log',
             'fancyticks': True, 'minorticks': True,
             'sharey': False,
-            'fontsize': 18,
-            'labelsize': 18,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
             'legend': {}#{'loc': 'best', 'ncol': 2, 'fontsize': 18}
         }
 
@@ -1681,9 +1709,37 @@ def plot_dd2_mkn_colorplot():
 
         o_plot.set_plot_dics.append(model)
 
+    ### -----------------------------------------------------------
+
     sim = "DD2_M13641364_M0_LK_SR_R04"
     data = COMBINE_LIGHTCURVES(sim)
 
+    ### Dyn
+    for band, n in zip(bands, plots):
+        model = {
+            'task': 'mkn median', "ptype": "cartesian",
+            'position': (1, n),
+            'data': data, 'band': band, 'obs': False, 'fname': 'mkn_model1.h5',
+            'v_n_x': 'time', 'v_n_y': 'mag',
+            'color': 'red', 'ls': ':', 'lw': 1., 'ds': 'default', 'alpha': 1.,
+            'ymin': 25, 'ymax': 15, 'xmin': 3e-1, 'xmax': 3e1,
+            'xlabel': r"time [days]", 'ylabel': r"AB magnitude at 40 Mpc",
+            'label': "DD2 1c", 'xscale': 'log',
+            'fancyticks': True, 'minorticks': True,
+            'sharey': False,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+            'legend': {}  # {'loc': 'best', 'ncol': 2, 'fontsize': 18}
+        }
+
+        if n != plots[-1]:
+            model['label'] = None
+
+        if n != 1:
+            model['sharey'] = True
+
+        o_plot.set_plot_dics.append(model)
+    ### Dyn + Wind
     for band, n in zip(bands, plots):
         model = {
             'task': 'mkn median', "ptype": "cartesian",
@@ -1693,11 +1749,11 @@ def plot_dd2_mkn_colorplot():
             'color': 'red', 'ls': '-', 'lw': 1., 'ds': 'default', 'alpha': 1.,
             'ymin': 25, 'ymax': 15, 'xmin': 3e-1, 'xmax': 3e1,
             'xlabel': r"time [days]", 'ylabel': r"AB magnitude at 40 Mpc",
-            'label': "DD2", 'xscale': 'log',
+            'label': "DD2 2c", 'xscale': 'log',
             'fancyticks': True, 'minorticks': True,
             'sharey': False,
-            'fontsize': 18,
-            'labelsize': 18,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
             'legend': {}  # {'loc': 'best', 'ncol': 2, 'fontsize': 18}
         }
 
@@ -1709,9 +1765,10 @@ def plot_dd2_mkn_colorplot():
 
         o_plot.set_plot_dics.append(model)
 
+    ### -----------------------------------------------------------
+    ### Wind Band
     sim = "DD2_M13641364_M0_LK_SR_R04"
     data = COMBINE_LIGHTCURVES(sim)
-
 
     for band, n in zip(bands, plots):
         model = {
@@ -1727,8 +1784,8 @@ def plot_dd2_mkn_colorplot():
             'fancyticks': True, 'minorticks': True,
             'mask': None, 'cmap': 'Reds', 'norm': "linear", # jet # Reds
             'sharey': False,
-            'fontsize': 18,
-            'labelsize': 18,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
             'legend': {}#{'loc': 'best', 'ncol': 2, 'fontsize': 18}
         }
 
@@ -1742,15 +1799,15 @@ def plot_dd2_mkn_colorplot():
             'xlabel': r"time [days]", 'ylabel': r"AB magnitude at 40 Mpc",
             'label': "AT2017gfo", 'xscale': 'log',
             'fancyticks': True, 'minorticks': True,
-            'title': {'text':'{} band'.format(band), 'fontsize': 18},
+            'title': {'text':'{} band'.format(band), 'fontsize': 14},
             'sharey': False,
-            'fontsize': 18,
-            'labelsize': 18,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
             'legend': {}
         }
 
         if n == plots[-1]:
-            obs['legend'] = {'loc': 'lower left', 'ncol': 1, 'fontsize': 16}
+            obs['legend'] = {'loc': 'lower left', 'ncol': 1, 'fontsize': 14}
 
         if n != plots[-1]:
             obs['label'] = None

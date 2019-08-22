@@ -40,9 +40,8 @@ from general import *
 from lists import *
 from filework import *
 from units import time_constant, volume_constant, energy_constant
-from gw import SIM_GW
 
-
+from preanalysis import LOAD_ITTIME
 
 
 
@@ -94,134 +93,10 @@ from gw import SIM_GW
     #
     #     return np.array(times[1:]), np.array(masses1), np.array(masses2)
 
-class LOAD_ITTIME:
-
-    def __init__(self, sim):
-
-        if not os.path.isfile(Paths.ppr_sims + sim + '/' + "ittime.h5"):
-            from analyze import SIM_STATUS
-            print("\tno ittime.h5 found. Creating...")
-            SIM_STATUS(sim, save=True, clean=True)
-
-        self.set_use_selected_output_if_many_found = True
-        self.clean = True
-        self.sim = sim
-
-        self.ittime_fname = Paths.ppr_sims + self.sim + '/ittime.h5'
-
-        self.dfile = h5py.File(self.ittime_fname, "r")
-
-        if not self.clean:
-            print("loaded file:\n{}\n contains:")
-            for v_n in self.dfile:
-                print(v_n)
-
-    @staticmethod
-    def find_nearest_index(array, value):
-        ''' Finds index of the value in the array that is the closest to the provided one '''
-        idx = (np.abs(array - value)).argmin()
-        return idx
-
-    def get_list_outputs(self):
-        return [str(output) for output in self.dfile.keys() if not output in ["profiles", "overall"]]
-
-    def get_ittime(self, output="overall", d1d2d3prof='d1'):
-        """
-        :param output: "output-0000", or "overall" or "profiles"
-        :param d1d2d3prof:
-        :return:
-        """
-        return bool(np.array(self.dfile[output]['{}data'.format(d1d2d3prof)], dtype=int)), \
-               np.array(self.dfile[output]['it{}'.format(d1d2d3prof)], dtype=int), \
-               np.array(self.dfile[output]['t{}'.format(d1d2d3prof)], dtype=float)
-
-    def get_output_for_it(self, it, d1d2d3='d1'):
-        isdata, allit, alltimes = self.get_ittime(output="overall", d1d2d3prof=d1d2d3)
-        if not isdata:
-            raise ValueError("data for d1d2d3:{} not available".format(d1d2d3))
-        if it < allit[0] or it > allit[-1]:
-            raise ValueError("it:{} is below min:{} or above max:{} in d1d2d3:{}"
-                             .format(it, allit[0], allit[-1], d1d2d3))
-        if not it in allit:
-            raise ValueError("it:{} is not in alliterations:{} for d1d2d3:{}"
-                             .format(it, allit, d1d2d3))
-        required_outputs = []
-        for key in self.dfile:
-            if key not in ["profiles", "overall"]:
-                output = key
-                isdata, outputiterations, outputtimesteps = \
-                    self.get_ittime(output, d1d2d3)
-                if isdata:
-                    if int(it) in outputiterations:
-                        required_outputs.append(output)
-        if len(required_outputs) == 0:
-            raise ValueError("no output is found for it:{} d1d2d3:{}"
-                             .format(it, d1d2d3))
-        elif len(required_outputs) > 1:
-            if not self.clean:
-                print("Warning. it:{} is found in multiple outputs:{} for d1d2d3:{}"
-                      .format(it, required_outputs, d1d2d3))
-            if self.set_use_selected_output_if_many_found:
-                return required_outputs[0]
-            else:
-                raise ValueError("Set 'self.set_use_selected_output_if_many_found=True' to get"
-                                 "0th output out of many found")
-        else:
-            return required_outputs[0]
-
-    def get_nearest_time(self, time__, d1d2d3='d1'):
-
-        isdata, allit, alltimes = self.get_ittime(output="overall", d1d2d3prof=d1d2d3)
-        if not isdata:
-            raise ValueError("data for d1d2d3:{} not available".format(d1d2d3))
-        if time__ < alltimes[0] or time__ > alltimes[-1]:
-            raise ValueError("time:{} is below min:{} or above max:{} in d1d2d3:{}"
-                             .format(time__, alltimes[0], alltimes[-1], d1d2d3))
-        if time__ in alltimes:
-            time_ = time__
-        else:
-            time_ = alltimes[self.find_nearest_index(alltimes, time__)]
-            if not self.clean:
-                print("nearest time to {}, is {}, selected for d1d2d3:{}"
-                      .format(time__, time_, d1d2d3))
-
-        return time_
-
-    def get_it_for_time(self, time__, d1d2d3='d1'):
-        time_ = self.get_nearest_time(time__, d1d2d3)
-        isdata, allit, alltimes = self.get_ittime(output="overall", d1d2d3prof=d1d2d3)
-        if isdata:
-            return int(allit[self.find_nearest_index(alltimes, time_)])
-        else:
-            raise ValueError("no data available for d1d2d3:{}".format(d1d2d3))
-
-    def get_time_for_it(self, it, d1d2d3='d1'):
-
-        isdata, allit, alltimes = self.get_ittime(output="overall", d1d2d3prof=d1d2d3)
-        if not isdata:
-            raise ValueError("data for d1d2d3:{} not available".format(d1d2d3))
-        if it < allit[0] or it > allit[-1]:
-            raise ValueError("it:{} is below min:{} or above max:{} in d1d2d3:{}"
-                             .format(it, allit[0], allit[-1], d1d2d3))
-        if not it in allit:
-            raise ValueError("it:{} is not in alliterations:{} for d1d2d3:{}"
-                             .format(it, allit, d1d2d3))
-
-        if isdata:
-            return float(alltimes[self.find_nearest_index(allit, it)])
-        else:
-            raise ValueError("no data available for d1d2d3:{}".format(d1d2d3))
-
-    def get_output_for_time(self, time__, d1d2d3='d1'):
-
-        it = self.get_it_for_time(time__, d1d2d3)
-        output = self.get_output_for_it(int(it), d1d2d3)
-
-        return output
 
 ''' --- '''
 
-class LOAD_FILES:
+class LOAD_FILES(LOAD_ITTIME):
 
     list_outflowed_files = [
         "total_flux.dat",
@@ -267,11 +142,14 @@ class LOAD_FILES:
     ]
 
     def __init__(self, sim):
+
+        LOAD_ITTIME.__init__(self, sim)
+
         self.gen_set = {
             "outflow": "outflow",
             "collated": "collated",
             "waveforms": "waveforms",
-            "res_3d": "res_3d"
+            "res_3d": "res_3d/"
         }
 
         self.sim = sim
@@ -348,10 +226,39 @@ class LOAD_FILES:
     def i_cr(self, criterion):
         return int(self.list_criteria.index(criterion))
 
-    def load_disk_mass_ev(self):
+    def load_disk_mass_ev(self, fname = "disk_mass.txt"):
+
+        core_path = Paths.ppr_sims + self.sim + '/' + self.gen_set['res_3d']
+        if not os.path.isdir(core_path):
+            print("Warning. dir:{} is absent".format(core_path))
+            return np.zeros(0, ), np.zeros(0, )
+
+        ispar, itpar, tpar = self.get_ittime("profiles", "prof")
+        if len(tpar) == 0:
+            print("Warning. No profiles exist -> Disk mass cannot be found")
+            return np.zeros(0, ), np.zeros(0, )
+        else:
+            times, masses = [], []
+            for it, t in zip(itpar, tpar):
+                if os.path.isdir(core_path + str(it) + '/') and os.path.isfile(core_path+str(it)+'/'+fname):
+                    mass = np.float(np.loadtxt(core_path+str(it)+'/'+fname, unpack=True))
+                    times.append(t)
+                    masses.append(mass)
+            if len(times) == 0:
+                print("Warning. No {} found in {}iteration/ dirs"
+                      .format(fname, core_path))
+
+            times = np.array(times)
+            masses = np.array(masses)
+            return times, masses
+
+
+
+    def load_disk_mass_ev_old(self):
 
         # check if res_3d exists:
         if not os.path.isdir(Paths.ppr_sims + self.sim + '/' + self.gen_set['res_3d'] + '/'):
+            print("Warning. {} dir is absent".format(self.sim + '/' + self.gen_set['res_3d'] + '/'))
             return np.zeros(0,), np.zeros(0,)
 
 
@@ -544,9 +451,9 @@ class COMPUTE_STORE_ARR(LOAD_FILES):
                 self.array_matrix[self.i_cr(criterion)][self.i_arr('unb_mass_bern')] = unb_mass
 
             elif v_n == 't_disk_mass' or v_n == 'disk_mass':
-                tmp = self.get_file("disk_mass.txt")
-                self.array_matrix[self.i_cr(criterion)][self.i_arr('t_disk_mass')] = tmp[:, 0]
-                self.array_matrix[self.i_cr(criterion)][self.i_arr('disk_mass')] = tmp[:, 1]
+                tmp1, tmp2 = self.get_file("disk_mass.txt")
+                self.array_matrix[self.i_cr(criterion)][self.i_arr('t_disk_mass')] = tmp1
+                self.array_matrix[self.i_cr(criterion)][self.i_arr('disk_mass')] = tmp2
 
         else:
             if v_n.__contains__("hist"):
@@ -671,14 +578,22 @@ class COMPUTE_STORE_PAR(COMPUTE_STORE_ARR):
                 self.parameter_matrix[self.i_cr(criterion)][self.i_par('Munb_tot')] = Munb_tot[-1]
 
             elif v_n == 'Mdisk3D':
-                self.parameter_matrix[self.i_cr(criterion)][self.i_par('Mdisk3D')] = self.get_arr("disk_mass")[-1]
+                if len(self.get_arr("disk_mass")) > 0:
+                    mass = self.get_arr("disk_mass")[-1]
+                else:
+                    mass = np.nan
+                self.parameter_matrix[self.i_cr(criterion)][self.i_par('Mdisk3D')] = mass
             elif v_n == 'tcoll_gw':
                 import scivis.units as ut  # for tmerg
-                time_ = np.float(self.get_file("tcoll.dat"))
-                Printcolor.yellow("Warning! using defauled M_Inf=2.748, R_GW=400.0 for retardet time")
-                ret_time = PHYSICS.get_retarded_time(time_, M_Inf=2.748, R_GW=400.0)
-                tcoll = ut.conv_time(ut.cactus, ut.cgs, ret_time)
-                self.parameter_matrix[self.i_cr(criterion)][self.i_par('tcoll_gw')] = tcoll # s
+                try:
+                    time_ = np.float(self.get_file("tcoll.dat"))
+                    Printcolor.yellow("Warning! using defauled M_Inf=2.748, R_GW=400.0 for retardet time")
+                    ret_time = PHYSICS.get_retarded_time(time_, M_Inf=2.748, R_GW=400.0)
+                    tcoll = ut.conv_time(ut.cactus, ut.cgs, ret_time)
+                    self.parameter_matrix[self.i_cr(criterion)][self.i_par('tcoll_gw')] = tcoll # s
+                except IOError:
+                    Printcolor.yellow("tcoll is not found for {}".format(self.sim))
+                    self.parameter_matrix[self.i_cr(criterion)][self.i_par('tcoll_gw')] = np.nan
 
             elif v_n == 'tmerger_gw':
                 import scivis.units as ut
@@ -698,7 +613,7 @@ class COMPUTE_STORE_PAR(COMPUTE_STORE_ARR):
                 self.parameter_matrix[self.i_cr(criterion)][self.i_par('Mej_tot')] = M_ej_tot[-1]
 
             elif v_n == "Ye_ave":
-                Mej = self.get_par("M_ej_tot", criterion)
+                Mej = self.get_par("Mej_tot", criterion)
                 ye = self.get_arr("hist_ye", criterion)
                 ye_M = self.get_arr("hist_ye_m", criterion)
                 ye_ave = np.sum(ye * ye_M) / Mej
@@ -713,19 +628,19 @@ class COMPUTE_STORE_PAR(COMPUTE_STORE_ARR):
                 self.parameter_matrix[self.i_cr(criterion)][self.i_par('s_ave')] = s_ave
 
             elif v_n == 'vel_inf_ave' and not criterion.__contains__('_b'): # NOT bernoulli v_inf
-                Mej = self.get_par("M_ej_tot", criterion)
+                Mej = self.get_par("Mej_tot", criterion)
                 vel_inf = self.get_arr("hist_vel_inf", criterion)
                 vel_inf_m = self.get_arr("hist_vel_inf_m", criterion)
                 vel_inf_ave = np.sum(vel_inf * vel_inf_m) / Mej
                 self.parameter_matrix[self.i_cr(criterion)][self.i_par('vel_inf_ave')] = vel_inf_ave
 
             elif v_n == 'vel_inf_ave' and criterion.__contains__('_b'): # bernoulli v_inf
-                Mej = self.get_par("M_ej_tot", criterion)
+                Mej = self.get_par("Mej_tot", criterion)
                 vel_inf_bern = self.get_arr("hist_vel_inf_bern", criterion)
                 vel_inf_bern_m = self.get_arr("hist_vel_inf_bern_m", criterion)
                 vel_inf_ave_bern = np.sum(vel_inf_bern * vel_inf_bern_m) / Mej
                 # print(vel_inf_ave_bern)
-                self.parameter_matrix[self.i_cr(criterion)][self.i_par('vel_inf_are')] = vel_inf_ave_bern
+                self.parameter_matrix[self.i_cr(criterion)][self.i_par('vel_inf_ave')] = vel_inf_ave_bern
 
             elif v_n == 'E_kin_ave' and not criterion.__contains__('_b'): # NOT bernoulli v_inf
                 vel_inf_ave = self.get_par("vel_inf_ave", criterion)
@@ -1416,9 +1331,11 @@ def viscosity_effect():
 
     exit(0)
 
+
 if __name__ == '__main__':
-
-
+    x = LOAD_INIT_DATA("DD2_M13641364_M0_LK_SR_R04")
+    print(x.par_dic)
+    pass
 
     # resoluton_effect()
     # viscosity_effect()
@@ -1436,17 +1353,17 @@ if __name__ == '__main__':
     # print(o_l_outflowed.get_file("hist_ye.dat", "_0_b_w"))
     # print(o_l_outflowed.get_file("dens_unbnd.norm1.asc"))
 
-    o_par = COMPUTE_STORE_PAR("DD2_M13641364_M0_LK_LR_PI")
-
-    print(o_par.get_arr('hist_vel_inf_m', '_0_b_w')); exit(1)
-
-    # print(o_par.get_arr("hist_ye", "_0_b_w")); exit(1)
-    print(o_par.get_par("Munb_tot"))
-
-    print(o_par.get_arr("hist_vel_inf_m", '_0_b_w')); exit(1)
-    print(o_par.get_par("Mej_tot", "_0"))
-    print(o_par.get_par("Mej_tot", "_0_b_w"))
-    print(o_par.get_par("theta_rms", "_0_b_w"))
+    # o_par = COMPUTE_STORE_PAR("DD2_M13641364_M0_LK_LR_PI")
+    #
+    # print(o_par.get_arr('hist_vel_inf_m', '_0_b_w')); exit(1)
+    #
+    # # print(o_par.get_arr("hist_ye", "_0_b_w")); exit(1)
+    # print(o_par.get_par("Munb_tot"))
+    #
+    # print(o_par.get_arr("hist_vel_inf_m", '_0_b_w')); exit(1)
+    # print(o_par.get_par("Mej_tot", "_0"))
+    # print(o_par.get_par("Mej_tot", "_0_b_w"))
+    # print(o_par.get_par("theta_rms", "_0_b_w"))
     # print(o_par.get_par("Mdisk3D", ""))
     # print(o_par.get_par("tcoll_gw", ""))
     # print(o_par.get_par("tmerger_gw", ""))

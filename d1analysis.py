@@ -23,7 +23,9 @@ import time
 import copy
 import h5py
 import csv
+import sys
 import os
+import re
 
 
 
@@ -154,7 +156,7 @@ class LOAD_FILES(LOAD_ITTIME):
 
         self.sim = sim
 
-        self.list_criteria = ['', "_0", "_1", "_0_b", "_1_b", "_0_b_w", "_1_b_w"]
+        self.list_criteria = ['', "_0", "_1", "_0_b", "_1_b", "_0_b_w", "_1_b_w", "_0_b_w_pc"]
 
         self.list_outflowed_files = [
                            "total_flux.dat",
@@ -983,7 +985,8 @@ class LOAD_NUCLEO:
 
         self.sim = sim
 
-        self.list_criteria = ['', "_0", "_1", "_0_b", "_1_b", "_0_b_w", "_1_b_w", "_0 _0_b_w"]
+        self.list_criteria = ['', "_0", "_1", "_0_b", "_1_b", "_0_b_w", "_1_b_w",
+                              "_0_b_w_pc", "_0 _0_b_w", "_0 _0_b_w _0_b_w_pc"]
 
 
         self.list_sims_v_ns = ["A", "Y_final", "Z"]
@@ -1257,14 +1260,168 @@ class NORMALIZE_NUCLEO(LOAD_NUCLEO):
         assert len(all_As) == len(all_Ys)
 
 ''' --- '''
+# David Radice's spherical Grid class for 'outflowed data'
+class SphericalSurface:
+    def __init__(self, ntheta, nphi, radius=1.0):
+        self.ntheta = ntheta
+        self.nphi   = nphi
+        self.radius = radius
+        self.dtheta = pi/self.ntheta
+        self.dphi   = 2*pi/self.nphi
+    def mesh(self):
+        theta = (np.arange(self.ntheta) + 0.5)*self.dtheta
+        phi   = np.linspace(0, 2*pi, self.nphi+1)
+        return np.meshgrid(theta, phi, indexing="ij")
+    def area(self):
+        theta, phi = self.mesh()
+        dA = self.radius**2 * np.sin(theta) * self.dtheta * self.dphi
+        dA[:,-1] = 0.0  # avoid double counting data at phi = 2 pi
+        return dA
+    # This mesh is used for the visualization
+    def mesh_vis(self):
+        dtheta = 180./(self.ntheta)
+        dphi   = 360./(self.nphi + 1)
+        theta  = (np.arange(self.ntheta) + 0.5)*dtheta - 90.0
+        phi    = (np.arange(self.nphi + 1) + 0.5)*dphi
+        return np.meshgrid(theta, phi, indexing='ij')
+    def reshape(self, vector):
+        return vector.reshape((self.ntheta, self.nphi + 1))
+    def size(self):
+        return (self.nphi + 1)*self.ntheta
+
+class LOAD_OUTFLOW_SURFACE(LOAD_ITTIME):
+
+    def __init__(self, sim):
+
+        LOAD_ITTIME.__init__(self, sim)
+
+        self.list_detectors = [0, 1]
+
+        self.list_v_ns = ['fluxdens', 'w_lorentz', 'eninf', 'rho', 'Y_e', 'entropy', 'temperature']
+
+        # dummy object to allocate space
+        self.matrix_grid_objects = [SphericalSurface(1,1,1.) for i in range(len(self.list_detectors))]
+
+        self.list_outputs = self.get_list_outputs()
+
+        self.matrix_raw_data = [[[np.zeros(0,)
+                                  for v in range(len(self.list_v_ns))]
+                                 for o in range(len(self.list_outputs))]
+                                for d in range(len(self.list_detectors))]
 
 
+        self.v_n_to_file_dic = {
+            'it'            : 0,
+            'time'          : 1,
+            'fluxdens'      : 5,
+            'w_lorentz'     : 6,
+            'eninf'         : 7,
+            'rho'           : 9,
+            'Y_e'           : 10,
+            'entropy'       : 11,
+            'temperature'   : 12
+        }
+
+        self.clean = False
+
+    def check_det(self, det):
+        if not det in self.list_detectors:
+            raise NameError("detector: {} is not in the list: {}"
+                            .format(det,self.list_detectors))
+
+    def i_det(self, det):
+        return int(self.list_detectors.index(det))
+
+    def _grid_object(self, det=0):
+
+        fname = "outflow_surface_det_%d_fluxdens.asc" % det
+        fpath = Paths.gw170817 + self.sim + "/" + self.get_list_outputs()[0] + "/data/" + fname
+        assert os.path.isfile(fpath)
+        dfile = open(fpath, "r")
+        dfile.readline() # move down one line
+        match = re.match('# detector no.=(\d+) ntheta=(\d+) nphi=(\d+)$', dfile.readline())
+        assert int(det) == int(match.group(1))
+        ntheta = int(match.group(2))
+        nphi =int(match.group(3))
+        dfile.readline()
+        dfile.readline()
+        line = dfile.readline().split()
+        radius = round(sqrt(float(line[2])**2 + float(line[3])**2 + float(line[4])**2))
+        if not self.clean:
+            print("     radius = {}".format(radius))
+            print("     ntheta = {}".format(ntheta))
+            print("     nphi   = {}".format(nphi))
+        return SphericalSurface(ntheta, nphi, radius)
+
+    def is_grid_object_loaded(self, det):
+        if isinstance(self.matrix_grid_objects[self.i_det(det)], int):
+            grid = self._grid_object(det)
+            self.matrix_grid_objects[self.i_det(det)]=grid
+
+    def get_grid_object(self, det=0):
+        self.check_det(det)
+        self.is_grid_object_loaded(det)
+        return self.matrix_grid_objects[self.i_det(det)]
+
+    def check_v_n(self, v_n):
+        if not v_n in self.list_v_ns:
+            raise NameError("v_n: {} is not in the list: {} "
+                            .format(v_n, self.list_v_ns))
+
+    def i_v_n(self, v_n):
+        return int(self.list_v_ns.index(v_n))
+
+    def check_output(self, output):
+        if not output in self.list_outputs:
+            raise NameError("output: {} is not on the list: {}"
+                            .format(output, self.list_outputs))
+
+    def i_output(self, output):
+        return int(self.list_outputs.index(output))
+
+    def load_raw_data(self, det, output):
+
+        fname = "outflow_surface_det_%d_fluxdens.asc" % det
+        fpath = Paths.gw170817 + self.sim + "/" + self.get_list_outputs()[0] + "/data/" + fname
+        assert os.path.isfile(fpath)
+        if not self.clean: print("\tReading %s..." % fpath),
+        sys.stdout.flush()
+        fdata = np.loadtxt(fpath,usecols=self.v_n_to_file_dic.values(), dtype=np.float64,unpack=True)
+        for key, val in self.v_n_to_file_dic.items():
+            data = np.array(fdata[val])
+            self.matrix_raw_data[self.i_det(det)][self.i_output(output)][self.i_v_n(key)] = data
+        if not self.clean: print("done!")
+        sys.stdout.flush()
+
+    def is_raw_data_loaded(self, det, output, v_n):
+        data = self.matrix_raw_data[self.i_det(det)][self.i_output(output)][self.i_v_n(v_n)]
+        if len(data) == 0:
+            self.load_raw_data(det, output)
+
+    def get_raw_data(self, det, output, v_n):
+        self.check_det(det)
+        self.check_output(output)
+        self.check_v_n(v_n)
+        self.is_raw_data_loaded(det, output, v_n)
+        data = self.matrix_raw_data[self.i_det(det)][self.i_output(output)][self.i_v_n(v_n)]
+        return data
+
+    def get_data_array(self, det, it1, it2):
+
+        assert it1 <= it2
 
 
+class COMPUTE_OUTFLOW_SURFACE(LOAD_OUTFLOW_SURFACE):
+
+    def __init__(self, sim):
+
+        LOAD_OUTFLOW_SURFACE.__init__(self, sim)
 
 
-
-
+    def get_total_flux(self, det):
+        grid = self.get_grid_object(det)
+        total_flux = np.zeros((grid.ntheta, grid.nphi + 1))
+        int_flux = 0.0
 
 """ --- ---- ---- --- ---- -- -- TASK SPECIFIC FUNTIONS --- -- --- -- - -- -- -"""
 

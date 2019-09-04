@@ -743,7 +743,7 @@ class LOAD_PROFILE(LOAD_ITTIME):
         if not isprofs:
             is3ddata, it3d, t3d = self.get_ittime("overall", d1d2d3prof="d3")
             if is3ddata:
-                raise IOError("ittime.h5 says there ae no profiles, while there is 3D data for times:\n{}"
+                raise IOError("ittime.h5 says there are no profiles, while there is 3D data for times:\n{}"
                               "\n Extract profiles before proceeding"
                               .format(t3d))
             else:
@@ -807,7 +807,7 @@ class LOAD_PROFILE(LOAD_ITTIME):
         self.dfile_matrix[self.i_it(it)] = dfile
 
     def is_dfile_loaded(self, it):
-        if isinstance(self.grid_matrix[self.i_it(it)], int):
+        if isinstance(self.dfile_matrix[self.i_it(it)], int): # dfile! not grid_matrix
             self.load_dfile(it)
 
     def get_profile_dfile(self, it):
@@ -1245,15 +1245,32 @@ class MAINMETHODS_STORE(MASK_STORE):
         # "v_n": "temp", "points: number, "scale": "log", (and "min":number, "max":number)
 
         rho_const = 6.176269145886162e+17
+
+        self.corr_task_dic_r_phi = [
+            {"v_n": "r", "edges": np.linspace(0, 50, 500)},
+            {"v_n": "phi", "edges": np.linspace(-np.pi, np.pi, 500)},
+        ]
+
+        self.corr_task_dic_rho_r = [
+            {"v_n": "rho", "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
+            {"v_n": "r", "edges": np.linspace(0, 100, 500)}
+        ]
+
+        self.corr_task_dic_rho_ye = [
+            # {"v_n": "temp", "edges": 10.0 ** np.linspace(-2, 2, 300)},
+            {"v_n": "rho",  "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
+            {"v_n": "Ye",   "edges": np.linspace(0, 0.5, 500)}
+        ]
+
         self.corr_task_dic_temp_ye = [
             # {"v_n": "rho",  "edges": 10.0 ** np.linspace(4.0, 16.0, 500) / rho_const},  # not in CGS :^
             {"v_n": "temp", "edges": 10.0 ** np.linspace(-2, 2, 300)},
             {"v_n": "Ye",   "edges": np.linspace(0, 0.5, 500)}
         ]
 
-        self.corr_task_dic_rho_ye = [
-            # {"v_n": "temp", "edges": 10.0 ** np.linspace(-2, 2, 300)},
-            {"v_n": "rho",  "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
+        self.corr_task_dic_velz_ye = [
+            # {"v_n": "rho",  "edges": 10.0 ** np.linspace(4.0, 16.0, 500) / rho_const},  # not in CGS :^
+            {"v_n": "velz", "edges": np.linspace(-1., 1., 500)},
             {"v_n": "Ye",   "edges": np.linspace(0, 0.5, 500)}
         ]
 
@@ -1267,15 +1284,19 @@ class MAINMETHODS_STORE(MASK_STORE):
             {"v_n": "theta", "edges": np.linspace(0, 0.5*np.pi, 500)}
         ]
 
-
-        self.corr_task_dic_rho_r = [
-            {"v_n": "rho", "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
-            {"v_n": "r", "edges": np.linspace(0, 100, 500)}
+        self.corr_task_dic_theta_dens_unb_bern = [
+            {"v_n": "theta", "edges": np.linspace(0, 0.5 * np.pi, 500)},
+            {"v_n": "dens_unb_bern", "edges": 10.0 ** np.linspace(-12., -6., 500)}  # not in CGS :^
         ]
 
         self.corr_task_dic_rho_ang_mom = [
             {"v_n": "rho", "edges": 10.0 ** np.linspace(4.0, 13.0, 500) / rho_const},  # not in CGS :^
             {"v_n": "ang_mom", "points": 500, "scale": "log", "min":1e-9} # find min, max yourself
+        ]
+
+        self.corr_task_dic_ye_dens_unb_bern = [
+            {"v_n": "Ye",   "edges": np.linspace(0, 0.5, 500)}, #"edges": np.linspace(-1., 1., 500)},  # in c
+            {"v_n": "dens_unb_bern", "edges": 10.0 ** np.linspace(-12., -6., 500)}
         ]
 
         self.corr_task_dic_rho_ang_mom_flux = [
@@ -1311,11 +1332,6 @@ class MAINMETHODS_STORE(MASK_STORE):
         self.corr_task_dic_inv_ang_mom_flux_dens_unb_bern = [
             {"v_n": "inv_ang_mom_flux", "points": 500, "scale": "log", "min":1e-12},  # not in CGS :^
             {"v_n": "dens_unb_bern", "edges": 10.0 ** np.linspace(-12., -6., 500)}
-        ]
-
-        self.corr_task_dic_r_phi = [
-            {"v_n": "r", "edges": np.linspace(0, 50, 500)},
-            {"v_n": "phi", "edges": np.linspace(-np.pi, np.pi, 500)},
         ]
 
         # -- 3D

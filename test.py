@@ -48,6 +48,12 @@ from units import time_constant, volume_constant, energy_constant
 from math import pi, log10
 import time
 
+""" comet """
+
+comet_sims = [
+    ""
+]
+
 
 """ --- scidata problem --- """
 
@@ -88,23 +94,32 @@ dic_to_tul={
              "SLy4_13641364_M0_LK_HR":  "SLy4_M13641364_M0_LK_HR"
 }
 
+# rsync -arvP --append di52pub@hw.supermuc.lrz.de:/gpfs/work/pn56zo/di52pub/old_simulations/DD2_13641364_M0_LK_LR_PI/output-????.tar ./
 lrz_sim_list = [
     "DD2_13641364_LK_SR_PI",
-    "DD2_13641364_M0_LK_LR_PI",
-    "DD2_13641364_M0_LK_SR_PI",
-    "DD2_15091235_M0_LK_HR",
-    "LS220_13641364_M0_LK_HR",
-    "LS220_13641364_M0_LK_HR",
-    "LS220_14691268_M0_LK_HR",
-    "LS220_14691268_M0_LK_HR",
-    "SFHo_14521283_M0_LK_HR_2",
+    # "DD2_13641364_M0_LK_LR_PI",  # FINISHED
+    "DD2_13641364_M0_LK_SR_PI",    # needs to be over (42ms)
+    "DD2_15091235_M0_LK_HR",       # 28 [ms]
+    "LS220_13641364_M0_LK_HR",     # FAILED
+    "LS220_13641364_M0_LK_SR",     # 50ms
+    "LS220_14691268_M0_LK_HR",     # 23ms
+    "SFHo_13641364_M0_LK_HR",      # 24ms
+    "SFHo_14521283_M0_LK_HR_2",    # 27ms
     "SLy4_13641364_M0_LK_HR",
     "SLy4_13641364_M0_LK_LR"
 ]
 
 # for sim in lrz_sim_list:
 #     print("mkdir $WORK/old_simulations/{}".format(sim))
-
+# print("25641369fmjks\n")
+# for sim in lrz_sim_list:
+#     lrz_sim = sim
+#     if lrz_sim == "LS220_13641364_M0_LK_SR": tul_sim = "LS220_M13641364_M0_LK_SR_restart"
+#     elif lrz_sim == "SFHo_14521283_M0_LK_HR_2": tul_sim = "SFHo_M14521283_M0_LK_HR"
+#     else: tul_sim = sim.replace("_1", "_M1")
+#     print("rsync -arvP --append di52pub@hw.supermuc.lrz.de:/gpfs/work/pn56zo/di52pub/old_simulations/{}/output-????.tar {}/;"
+#           .format(lrz_sim, tul_sim))
+# print("echo 'done'")
 
 for sim in lrz_sim_list:
     print("rsync -arvP --append $SCRATCH/simulations/deep_simulations/{}/*.tar $WORK/old_simulations/{}/".format(sim, sim))

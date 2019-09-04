@@ -47,7 +47,7 @@ class SIM_STATUS:
 
     def __init__(self, sim, clean=True, save=True):
         self.sim = sim
-        self.clean = False
+        self.clean = clean
 
         self.simdir = Paths.gw170817 + sim + '/' #"/data1/numrel/WhiskyTHC/Backup/2018/GW170817/" + sim +'/'
         self.resdir = Paths.ppr_sims + sim + '/'
@@ -124,6 +124,8 @@ class SIM_STATUS:
         '''
 
         self.profiles = {}
+
+        self.nuprofiles = {}
         '''
             {'profdata':True, 'itprofs':[1345, ...],    'tprofs':[1345, ...]} 
         '''
@@ -171,11 +173,17 @@ class SIM_STATUS:
             self.output_dics[output]['itd1'] = d1iterations
             self.output_dics[output]['td1'] = d1timesteps
 
+        # alld1iterations = np.array(alld1iterations).flatten()
+        # alld1timesteps = np.array(alld1timesteps).flatten()
+        # print(alld1iterations.shape)
         assert len(alld1timesteps) == len(alld1iterations)
+        # assert not np.isnan(np.sum(alld1timesteps)) and not np.isnan(np.sum(alld1iterations))
+
         if len(alld1timesteps) > 0:
             alld1iterations = np.sort(np.unique(np.concatenate(alld1iterations)))
             alld1timesteps = np.sort(np.unique(np.concatenate(alld1timesteps)))
             assert len(alld1timesteps) == len(alld1iterations)
+            assert not np.isnan(np.sum(alld1timesteps)) and not np.isnan(np.sum(alld1iterations))
             self.overall["d1data"] = True
             self.overall["itd1"] = alld1iterations
             self.overall["td1"] = alld1timesteps
@@ -199,10 +207,13 @@ class SIM_STATUS:
             self.output_dics[output]['td2'] = d2timesteps
 
         assert len(alld2timesteps) == len(alld2iterations)
+        # assert not np.isnan(np.sum(alld2timesteps)) and not np.isnan(np.sum(alld2iterations))
+
         if len(alld2timesteps) > 0:
             alld2iterations = np.sort(np.unique(np.concatenate(alld2iterations)))
             alld2timesteps = np.sort(np.unique(np.concatenate(alld2timesteps)))
             assert len(alld2timesteps) == len(alld2iterations)
+            assert not np.isnan(np.sum(alld2timesteps)) and not np.isnan(np.sum(alld2iterations))
             self.overall["d2data"] = True
             self.overall["itd2"] = alld2iterations
             self.overall["td2"] = alld2timesteps
@@ -225,10 +236,12 @@ class SIM_STATUS:
             self.output_dics[output]['td3']    = d3timesteps
 
         assert len(alld3timesteps) == len(alld3iterations)
+        # assert not np.isnan(np.sum(alld3timesteps)) and not np.isnan(np.sum(alld3iterations))
         if len(alld3timesteps) > 0:
             alld3iterations = np.sort(np.unique(np.concatenate(alld3iterations)))
             alld3timesteps = np.sort(np.unique(np.concatenate(alld3timesteps)))
             assert len(alld3timesteps) == len(alld3iterations)
+            assert not np.isnan(np.sum(alld3timesteps)) and not np.isnan(np.sum(alld3iterations))
             self.overall["d3data"] = True
             self.overall["itd3"] = alld3iterations
             self.overall["td3"] = alld3timesteps
@@ -237,71 +250,34 @@ class SIM_STATUS:
             self.overall["itd3"] = np.empty(0,)
             self.overall["t3d"] = np.empty(0,)
 
-        #
-        #
-        # for outout_dir in self.outputs_dirs:
-        #
-        #     _name = str(outout_dir.split('/')[-1])
-        #     _int = int(_name.split('output-')[-1])
-        #     _dir = True
-        #     if _name in self.tars:
-        #         _tar = True
-        #     else:
-        #         _tar = False
-        #     if _name in self.dattars:
-        #         _dattar = True
-        #     else:
-        #         _dattar = False
-        #     isd1data, d1iterations, d1timesteps = \
-        #         self.scan_d1_data(outout_dir)
-        #     alld1iterations.append(d1iterations)
-        #     alld1timesteps.append(d1timesteps)
-        #     isd2data, d2iterations, d2timesteps = \
-        #         self.scan_d2_data(outout_dir, d1iterations, d1timesteps)
-        #     alld2iterations.append(d2iterations)
-        #     alld2timesteps.append(d2timesteps)
-        #     isd3data, d3iterations, d3timesteps = \
-        #         self.scan_d3_data(outout_dir, d1iterations, d1timesteps)
-        #     alld3iterations.append(d3iterations)
-        #     alld3timesteps.append(d3timesteps)
-        #
-        #     one_output = {}
-        #     one_output['int'] = _int
-        #     one_output['dir'] = _dir
-        #     one_output['tar'] = _tar
-        #     one_output['dattar'] = _dattar
-        #     one_output['d1data'] = isd1data
-        #     one_output['itd1']   = d1iterations
-        #     one_output['td1']    = d1timesteps
-        #     one_output['d2data'] = isd2data
-        #     one_output['itd2']   = d2iterations
-        #     one_output['td2']    = d2timesteps
-        #     one_output['d3data'] = isd3data
-        #     one_output['itd3']   = d3iterations
-        #     one_output['td3']    = d3timesteps
-        #
-        #     self.outputs[_name] = one_output
-
-        # print(np.array(alld1iterations).flatten(order=0))
-        # exit(1)
-
-
-
-
-
+        # --- profs --- #
 
         isprofdata, profiterations, proftimesteps = \
-            self.scan_profs_data()
+            self.scan_profs_data(fname=".h5")
+        assert len(profiterations) == len(proftimesteps)
+        assert not np.isnan(np.sum(profiterations)) and not np.isnan(np.sum(proftimesteps))
+
         self.profiles['profdata'] = isprofdata
         self.profiles['itprof']  = profiterations
         self.profiles['tprof']   = proftimesteps
 
+        # --- nu profs --- #
+
+        isnuprofdata, nuprofiterations, nuproftimesteps = \
+            self.scan_profs_data(fname="nu.h5")
+        assert len(nuprofiterations) == len(nuproftimesteps)
+        assert not np.isnan(np.sum(nuprofiterations)) and not np.isnan(np.sum(nuproftimesteps))
+
+        self.nuprofiles['nuprofdata'] = isnuprofdata
+        self.nuprofiles['itnuprof']  = nuprofiterations
+        self.nuprofiles['tnuprof']   = nuproftimesteps
 
         print("\t{}".format(self.sim))
         print("\toutputs : {}".format(len(self.outputs)))
         print("\ttars    : {}".format(len(self.tars)))
         print("\tdattars : {}".format(len(self.dattars)))
         print("\tprofs   : {}".format(len(proftimesteps)))
+        print("\tnu profs: {}".format(len(nuproftimesteps)))
         # for outout_dir in self.outputs_dirs:
             # _name = str(outout_dir.split('/')[-1])
             # print(self.outputs[_name])
@@ -349,13 +325,13 @@ class SIM_STATUS:
                             .format(output))
         return self.outputs[self.outputs.index(output)+1]
 
-    def get_profiles(self):
+    def get_profiles(self, fname=''):
         if not os.path.isdir(self.profdir):
             if not self.clean:
-                print("Note. No profile directory found. \nExpected: {}"
+                print("Note. No profiels directory found. \nExpected: {}"
                       .format(self.profdir))
             return []
-        profiles = glob(self.profdir + "*.h5")
+        profiles = glob(self.profdir + '*' + fname)
         return profiles
 
     def scan_d1_data(self, output_dir):
@@ -522,43 +498,68 @@ class SIM_STATUS:
         #     print(output_dir); exit(0)
         return d3data, iterations, timesteps
 
-    def scan_profs_data(self):
+    @staticmethod
+    def linear_fit(it, it1=1, it2=1.4, t1=5., t2=10.):
 
-        profiles = self.get_profiles()
+        k = (it2 - it1) / (t2 - t1)
+        b = it2 - (k * t2)
+
+        return (it - b) / k
+
+    def scan_profs_data(self, fname='.h5'):
+
+        profiles = self.get_profiles(fname=fname)
 
         if len(profiles) > 0:
-            iterations = np.array(np.sort(np.array(list([int(profile.split('/')[-1].split(".h5")[0])
+            import re
+            iterations = np.array(np.sort(np.array(list([int(profile.split('/')[-1].split(fname)[0])
                                                               for profile in profiles
                                                               if re.match("^[-+]?[0-9]+$",
-                                                                          profile.split('/')[-1].split(".h5")[0])]))),
+                                                                          profile.split('/')[-1].split(
+                                                                              fname
+                                                                          )[0])]))),
                                                                 dtype=int)
             if len(iterations) != len(profiles):
                 if not self.clean:
-                    print("ValueError. Though {} profiles found, {} iterations found."
-                          .format(len(profiles), len(iterations)))
-                return 0, np.empty(0,), np.empty(0,)
-            else:
-                d1iterations = self.overall["itd1"]
-                d1times = self.overall["td1"]
-                iterations = np.unique(iterations)
-                listd1iterations = list(d1iterations)
-                times = []
-                for it in iterations:
-                    if not int(it) in d1iterations:
-                        if not self.clean:
-                            print("Warning prof. it:{} is not in the itd1 list"
-                                  .format(it))
+                    print("ValueError. Though {} {} profiles found, {} iterations found."
+                          .format(len(profiles), fname, len(iterations)))
+                #return 0, np.empty(0,), np.empty(0,)
+
+            d1iterations = self.overall["itd1"]
+            d1times = self.overall["td1"]
+            iterations = np.unique(iterations)
+            listd1iterations = list(d1iterations)
+            times = []
+            for it in iterations:
+                if not int(it) in d1iterations:
+                    if not self.clean:
+                        print("Warning {} prof. it:{} is not in the itd1 list"
+                              .format(fname, it))
+
+                    if it > d1iterations.max():
+                        print("Warning: prof it:{} is above d1.max():{}"
+                              .format(it, d1iterations.max()))
+                        _t_ = self.linear_fit(it, d1iterations[0], d1iterations[-1], d1times[0], d1times[-1])
+                    elif it < d1iterations.min():
+                        print("Warning: prof it:{} is below d1.max():{}"
+                              .format(it, d1iterations.max()))
+                        _t_ = self.linear_fit(it, d1iterations[0], d1iterations[-1], d1times[0], d1times[-1])
+                    else:
                         from scipy import interpolate
                         _t_ = interpolate.interp1d(d1iterations, d1times, bounds_error=False)(it)
-                        times.append(_t_)
-                    else:
-                        times.append(d1times[listd1iterations.index(int(it))])
-                times = np.array(times, dtype=float)
-                return 1, iterations, times
+
+                    assert not np.isnan(_t_)
+                    times.append(_t_)
+                else:
+                    times.append(d1times[listd1iterations.index(int(it))])
+            times = np.array(times, dtype=float)
+            return 1, iterations, times
+
+
 
         else:
             if not self.clean:
-                print("Note. No profiles found in dir:\n{}".format(self.profdir))
+                print("Note. No {} profiles found in dir:\n{}".format(fname, self.profdir))
             return 0, np.empty(0,), np.empty(0,)
 
     def save(self, resfile):
@@ -581,6 +582,10 @@ class SIM_STATUS:
         dfile.create_group("profiles")
         for key in self.profiles.keys():
             dfile["profiles"].create_dataset(key, data=self.profiles[key])
+
+        dfile.create_group("nuprofiles")
+        for key in self.nuprofiles.keys():
+            dfile["nuprofiles"].create_dataset(key, data=self.nuprofiles[key])
 
         dfile.create_group("overall")
         for key in self.overall.keys():
@@ -618,12 +623,12 @@ class LOAD_ITTIME:
         return idx
 
     def get_list_outputs(self):
-        return [str(output) for output in self.dfile.keys() if not output in ["profiles", "overall"]]
+        return [str(output) for output in self.dfile.keys() if not output in ["profiles", "overall", "nuprofiles"]]
 
     def get_ittime(self, output="overall", d1d2d3prof='d1'):
         """
-        :param output: "output-0000", or "overall" or "profiles"
-        :param d1d2d3prof:
+        :param output: "output-0000", or "overall" or "profiles", "nuprofiles"
+        :param d1d2d3prof: d1, d2, d3, prof, nuprof
         :return:
         """
         return bool(np.array(self.dfile[output]['{}data'.format(d1d2d3prof)], dtype=int)), \
@@ -768,6 +773,7 @@ class PRINT_SIM_STATUS(LOAD_ITTIME):
         self.print_ititme_status("overall", d1d2d3prof="d2", start=tstart, stop=tend, tstep=tstep, precision=prec)
         self.print_ititme_status("overall", d1d2d3prof="d3", start=tstart, stop=tend, tstep=tstep, precision=prec)
         self.print_ititme_status("profiles", d1d2d3prof="prof", start=tstart, stop=tend, tstep=tstep, precision=prec)
+        self.print_ititme_status("nuprofiles", d1d2d3prof="nuprof", start=tstart, stop=tend, tstep=tstep, precision=prec)
 
         # self.print_gw_ppr_time(comma=True)
         # self.print_assert_collated_data()
@@ -834,10 +840,10 @@ class PRINT_SIM_STATUS(LOAD_ITTIME):
     def get_outputs(self):
         return [str(output_dir.split('/')[-1]) for output_dir in self.get_outputdirs()]
 
-    def get_profiles(self):
+    def get_profiles(self, extra=''):
         if not os.path.isdir(self.prof_in_data):
             return []
-        profiles = glob(self.prof_in_data + "*.h5")
+        profiles = glob(self.prof_in_data + "*{}.h5".format(extra))
         # print(profiles)
         return profiles
 
@@ -883,18 +889,26 @@ class PRINT_SIM_STATUS(LOAD_ITTIME):
         isd3, itd3, td3 = self.get_ittime("overall", d1d2d3prof="d3")
         isprof, itprof, tprof = self.get_ittime("profiles", d1d2d3prof="prof")
 
+
+
         if len(td1) > 0:
+            assert not np.isnan(td1[0]) and not np.isnan(td1[-1])
             t1.append(td1[0])
             t2.append(td1[-1])
         if len(td2) > 0:
+            assert not np.isnan(td2[0]) and not np.isnan(td2[-1])
             t1.append(td2[0])
             t2.append(td2[-1])
         if len(td3) > 0:
+            assert not np.isnan(td3[0]) and not np.isnan(td3[-1])
             t1.append(td3[0])
             t2.append(td3[-1])
         if len(tprof) > 0:
+            assert not np.isnan(tprof[0]) and not np.isnan(tprof[-1])
             t1.append(tprof[0])
             t2.append(tprof[-1])
+
+
 
         return np.array(t1).min() * 1e3 + 1, np.array(t2).max() * 1e3 + 1
 
@@ -1035,7 +1049,9 @@ class PRINT_SIM_STATUS(LOAD_ITTIME):
     def print_timemarks(self, start=0., stop=30., tstep=1., tmark=10., comma=False):
 
         trange = np.arange(start=start, stop=stop, step=tstep)
-        Printcolor.blue("\tTimesteps {}ms ".format(tmark, tstep), comma=True)
+
+
+        Printcolor.blue("\tTimesteps {}ms   ".format(tmark, tstep), comma=True)
         print('['),
         for t in trange:
             if t % tmark == 0:
@@ -1060,8 +1076,9 @@ class PRINT_SIM_STATUS(LOAD_ITTIME):
             dic_outend["%.3f" % (td1[-1] * 1e3)] = output.split("output-")[-1]
 
         for digit, letter, in zip(range(4), ['o', 'u', 't', '-']):
-            print("\t       {}         ".format(letter)),
+            print("\t         {}         ".format(letter)),
             # Printcolor.blue("\tOutputs end [ms] ", comma=True)
+            # print(start, stop, tstep)
             trange = np.arange(start=start, stop=stop, step=tstep)
             print('['),
             for t in trange:
@@ -1096,15 +1113,17 @@ class PRINT_SIM_STATUS(LOAD_ITTIME):
         # trange = np.arange(start=td[0], stop=td[-1], step=tstep)
         trange = np.arange(start=start, stop=stop, step=tstep)
 
-        _name_ = ''
+        _name_ = '  '
         if d1d2d3prof == 'd1':
-            _name_ = "D1  "
+            _name_ = "D1    "
         elif d1d2d3prof == "d2":
-            _name_ = "D2  "
+            _name_ = "D2    "
         elif d1d2d3prof == "d3":
-            _name_ = "D3  "
+            _name_ = "D3    "
         elif d1d2d3prof == "prof":
-            _name_ = "prof"
+            _name_ = "prof  "
+        elif d1d2d3prof == "nuprof":
+            _name_ = "nuprof"
 
         # print(td)
 
@@ -1222,68 +1241,90 @@ class PRINT_SIM_STATUS(LOAD_ITTIME):
 
 class INIT_DATA:
 
-    def __init__(self, sim):
+    def __init__(self, sim, clean=True):
 
         self.sim = sim
-
+        self.clean = clean
         # ---
+        self.is_init_data_available = True
+        if not os.path.isdir(Paths.ppr_sims+sim):
+            if not self.clean:
+                print("Dir {} does not exist -- creating".format(Paths.ppr_sims+sim))
+                os.mkdir(Paths.ppr_sims+sim)
+        if not os.path.isfile(Paths.ppr_sims+sim+"parfile.par"):
+            if not self.clean:
+                print("parfile.par is absent in ppr dir: {} -- trying to copy"
+                      .format(Paths.ppr_sims+sim))
+            os.system("cp {} {}".format(Paths.gw170817 + sim + "/output-0003/parfile.par",
+                                  Paths.ppr_sims + sim + "/"))
+            if not os.path.isfile(Paths.ppr_sims + sim + "/" + "parfile.par"):
+                if not self.clean:
+                    print("Error. copyting of {} TO {} has failed."
+                          .format(Paths.gw170817 + sim + "/output-0003/parfile.par",
+                                  Paths.ppr_sims + sim + "/"))
+
+
         self.init_data_dir = Paths.ppr_sims+sim+'/initial_data/'
         if not os.path.isdir(self.init_data_dir):
             self.copy_extract_initial_data()
-        assert os.path.isdir(self.init_data_dir)
-        # Printcolor.blue("\tinitial_data directory is found.")
-        # ---
+        if self.is_init_data_available:
+            assert os.path.isdir(self.init_data_dir)
+            # Printcolor.blue("\tinitial_data directory is found.")
+            # ---
 
-        self.list_expected_eos = [
-            "SFHo", "SLy4", "DD2", "BLh", "LS220", "BHB", "BHBlp"
-        ]
+            self.list_expected_eos = [
+                "SFHo", "SLy4", "DD2", "BLh", "LS220", "BHB", "BHBlp"
+            ]
 
-        self.list_expected_resolutions = [
-            "HR", "LR", "SR", "VLR"
-        ]
+            self.list_expected_resolutions = [
+                "HR", "LR", "SR", "VLR"
+            ]
 
-        self.list_expected_viscosities = [
-            "LK", "L50", "L25", "L5"
-        ]
+            self.list_expected_viscosities = [
+                "LK", "L50", "L25", "L5"
+            ]
 
-        self.list_expected_neutrinos = [
-            "M0", "M1"
-        ]
+            self.list_expected_neutrinos = [
+                "M0", "M1"
+            ]
 
-        self.list_expected_initial_data = [
-            "R01", "R02", "R03", "R04", "R05", "R04_corot"
-        ]
+            self.list_expected_initial_data = [
+                "R01", "R02", "R03", "R04", "R05", "R04_corot"
+            ]
 
-        self.init_data_dir = Paths.ppr_sims+sim+'/initial_data/'
-        assert os.path.isdir(self.init_data_dir)
+            self.init_data_dir = Paths.ppr_sims+sim+'/initial_data/'
+            assert os.path.isdir(self.init_data_dir)
 
-        self.par_dic = {}
-        self.get_pars_from_sim_name()
-        Printcolor.blue("\tSelf data from the sim name is parsed")
-        self.load_calcul_extract_pars()
-        Printcolor.blue("\tData from calcul.d os parsed")
-        if self.par_dic["EOS"] == 'SFHo':
-            tov_fname = Paths.TOVs + 'SFHo_love.dat'
-        elif self.par_dic["EOS"] == 'DD2':
-            tov_fname = Paths.TOVs + 'DD2_love.dat'
-        elif self.par_dic["EOS"] == 'LS220':
-            tov_fname = Paths.TOVs + 'LS220_love.dat'
-        elif self.par_dic["EOS"] == 'SLy4':
-            tov_fname = Paths.TOVs + 'SLy4_love.dat'
-        elif self.par_dic["EOS"] == 'BHBlp' or self.par_dic["EOS"] == 'BHB':
-            tov_fname = Paths.TOVs + 'BHBlp_love.dat'
+            self.par_dic = {}
+            self.get_pars_from_sim_name()
+            Printcolor.blue("\tSelf data from the sim name is parsed")
+            self.load_calcul_extract_pars()
+            Printcolor.blue("\tData from calcul.d os parsed")
+            if self.par_dic["EOS"] == 'SFHo':
+                tov_fname = Paths.TOVs + 'SFHo_love.dat'
+            elif self.par_dic["EOS"] == 'DD2':
+                tov_fname = Paths.TOVs + 'DD2_love.dat'
+            elif self.par_dic["EOS"] == 'LS220':
+                tov_fname = Paths.TOVs + 'LS220_love.dat'
+            elif self.par_dic["EOS"] == 'SLy4':
+                tov_fname = Paths.TOVs + 'SLy4_love.dat'
+            elif self.par_dic["EOS"] == 'BHBlp' or self.par_dic["EOS"] == 'BHB':
+                tov_fname = Paths.TOVs + 'BHBlp_love.dat'
+            else:
+                raise NameError("\tTOV sequences are not found for EOS:{} ".format(self.par_dic["EOS"]))
+            self.load_tov_extract_pars(tov_fname)
+            Printcolor.blue("\tData from TOV is parsed")
+
+            self.save_as_csv("init_data.csv")
+            Printcolor.blue("\tinitial data is saved")
         else:
-            raise NameError("\tTOV sequences are not found for EOS:{} ".format(self.par_dic["EOS"]))
-        self.load_tov_extract_pars(tov_fname)
-        Printcolor.blue("\tData from TOV is parsed")
-
-        self.save_as_csv("init_data.csv")
-        Printcolor.blue("\tinitial data is saved")
-
+            Printcolor.red("\tError. Initial data was not computed")
 
     def get_fname_for_init_data_from_parfile(self):
 
-        assert os.path.isfile(Paths.ppr_sims + self.sim + '/parfile.par')
+        if not os.path.isfile(Paths.ppr_sims + self.sim + '/parfile.par'):
+            print("Error. parfile in ppr directory is not found. ")
+
 
         initial_data = ""
         lines = open(Paths.ppr_sims + self.sim + '/parfile.par', "r").readlines()
@@ -1305,32 +1346,40 @@ class INIT_DATA:
 
         run, dirnmame = self.get_fname_for_init_data_from_parfile()
 
-        assert os.path.isdir(Paths.lorene + run + '/')
+        if not os.path.isdir(Paths.lorene + run + '/'):
+            self.is_init_data_available = False
+            Printcolor.red("\tError. Init. data source dir is not found: {}"
+                           .format(Paths.lorene + run + '/'))
 
-        assert os.path.isfile(Paths.lorene + run + '/' + dirnmame + '.tar.gz')
+        elif not os.path.isfile(Paths.lorene + run + '/' + dirnmame + '.tar.gz'):
+            self.is_init_data_available = False
+            Printcolor.red("\tError. Init. data archive is not found: {}"
+                           .format(Paths.lorene + run + '/' + dirnmame + '.tar.gz'))
 
-        if not os.path.isdir(Paths.ppr_sims + self.sim + '/' + finaldir + '/'):
-            os.mkdir(Paths.ppr_sims + self.sim + '/' + finaldir + '/')
-
-        # Andrea's fucking new approach
-        if run == "R05":
-            os.system("tar -xzf {} --directory {}".format(
-                Paths.lorene + run + '/' + dirnmame + ".tar.gz",
-                Paths.ppr_sims + self.sim + "/" + finaldir + '/'
-            ))
         else:
-            os.system("rm -r {}".format(Paths.ppr_sims + self.sim + '/' + finaldir + '/'))
-            os.system("tar -xzf {} --directory {}".format(
-                Paths.lorene + run + '/' + dirnmame + ".tar.gz",
-                Paths.ppr_sims + self.sim + "/"
-            ))
-            os.system("mv {} {}".format(
-                Paths.ppr_sims + self.sim + '/' + dirnmame,
-                Paths.ppr_sims + self.sim + '/' + finaldir
-            ))
+            self.is_init_data_available = True
+            if not os.path.isdir(Paths.ppr_sims + self.sim + '/' + finaldir + '/'):
+                os.mkdir(Paths.ppr_sims + self.sim + '/' + finaldir + '/')
 
-        Printcolor.blue("Initial data {} ({}) has been extracted and moved"
-                        .format(dirnmame, run))
+            # Andrea's fucking new approach
+            if run == "R05":
+                os.system("tar -xzf {} --directory {}".format(
+                    Paths.lorene + run + '/' + dirnmame + ".tar.gz",
+                    Paths.ppr_sims + self.sim + "/" + finaldir + '/'
+                ))
+            else:
+                os.system("rm -r {}".format(Paths.ppr_sims + self.sim + '/' + finaldir + '/'))
+                os.system("tar -xzf {} --directory {}".format(
+                    Paths.lorene + run + '/' + dirnmame + ".tar.gz",
+                    Paths.ppr_sims + self.sim + "/"
+                ))
+                os.system("mv {} {}".format(
+                    Paths.ppr_sims + self.sim + '/' + dirnmame,
+                    Paths.ppr_sims + self.sim + '/' + finaldir
+                ))
+
+            Printcolor.blue("Initial data {} ({}) has been extracted and moved"
+                            .format(dirnmame, run))
 
         # else:
         #     Printcolor.blue("\tinitial_data directory is found.")
@@ -1399,6 +1448,9 @@ class INIT_DATA:
         lines = open(self.init_data_dir+fname).readlines()
         # data_dic = {}
         for line in lines:
+
+            # if not self.clean:
+            #     print("\t\t{}".format(line))
 
             if line.__contains__("Baryon mass required for star 1"):
                 self.par_dic["Mb1"] = float(line.split()[0]) # Msun
@@ -1498,8 +1550,8 @@ class LOAD_INIT_DATA:
     def __init__(self, sim):
         self.sim = sim
         self.par_dic = {}
-
-        self.load_csv("init_data.csv")
+        self.fname = "init_data.csv"
+        self.load_csv(self.fname)
 
     def load_csv(self, fname):
         # import csv
@@ -1525,6 +1577,7 @@ class LOAD_INIT_DATA:
             return float(par)
         except:
             return par
+
 
 if __name__ == '__main__':
     # self = SIM_SELF_PARS("LS220_M13641364_M0_LK_SR")

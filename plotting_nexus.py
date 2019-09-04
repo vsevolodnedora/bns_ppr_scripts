@@ -39,20 +39,42 @@ class BASIC_PARTS():
             #     #     title = plot_dic["title"]
             #     ax.title.set_text(r'{}'.format(title))
 
-    def set_min_max_scale(self, ax, dic):
+    def set_min_max_scale(self, ax, dic, n_col, n_row):
+        # ax = self.sbplot_matrix[n_col][n_row]
         if dic["ptype"] == "cartesian":
-            if "xmin" in dic.keys() and "xmax" in dic.keys():
-                if dic["xmin"] != None and dic["xmax"] != None:
-                    ax.set_xlim(dic["xmin"], dic["xmax"])
-            if "ymin" in dic.keys() and "ymax" in dic.keys():
-                if dic["ymin"] != None and dic["ymax"] != None:
-                    ax.set_ylim(dic["ymin"], dic["ymax"])
             if "xscale" in dic.keys():
                 if dic["xscale"] == 'log':
+                    #print("n_col:{} n_row:{} setting xscale: {}".format(n_col, n_row, dic["xscale"])),
                     ax.set_xscale("log")
+                    #print(" getting xscale: {}".format(ax.get_xscale()))
+                elif dic["xscale"] == 'linear':
+                    #print("n_col:{} n_row:{} setting yscale: {}".format(n_col, n_row, dic["yscale"])),
+                    ax.set_xscale("linear")
+                    #print(" getting yscale: {}".format(ax.get_yscale()))
+                else:
+                    ax.set_xscale("linear")
+                    print("xscale '{}' is not recognized".format(dic["xscale"]))
+
             if "yscale" in dic.keys():
                 if dic["yscale"] == 'log':
                     ax.set_yscale("log")
+                elif dic["yscale"] == 'linear':
+                    ax.set_yscale("linear")
+                else:
+                    ax.set_yscale("linear")
+                    print("yscale '{}' is not recognized".format(dic["yscale"]))
+
+            if "xmin" in dic.keys() and "xmax" in dic.keys():
+                if dic["xmin"] != None and dic["xmax"] != None:
+                    #print("n_col:{} n_row:{} setting xlim:[{} {}]".format(n_col, n_row, dic["xmin"], dic["xmax"])),
+                    ax.set_xlim(float(dic["xmin"]), float(dic["xmax"]))
+                    #print("getting xlim:[{}, {}]".format(n_col, n_row, ax.get_xlim()[0], ax.get_xlim()[1]))
+            if "ymin" in dic.keys() and "ymax" in dic.keys():
+                if dic["ymin"] != None and dic["ymax"] != None:
+                    #print("n_col:{} n_row:{} setting ylim:[{} {}]".format(n_col, n_row, dic["ymin"], dic["ymax"])),
+                    ax.set_ylim(float(dic["ymin"]), float(dic["ymax"]))
+                    #print("getting ylim:[{} {}]".format(n_col, n_row, ax.get_ylim()[0], ax.get_ylim()[1]))
+
         elif dic["ptype"] == "polar":
 
             if "phimin" in dic.keys() and "phimax" in dic.keys():
@@ -72,6 +94,8 @@ class BASIC_PARTS():
                     raise NameError("log scale is not available for y in polar")
         else:
             raise NameError("Unknown 'ptype' of the plot: {}".format(dic["ptype"]))
+
+        return ax
 
     def set_xy_labels(self, ax, dic):
 
@@ -173,6 +197,10 @@ class BASIC_PARTS():
                 # print(z_arr)
             elif dic["mask"] == "positive":
                 z_arr = -1 * np.ma.masked_array(z_arr, z_arr > 0)
+            elif dic["mask"] == "x>0":
+                z_arr = np.ma.masked_array(z_arr, x_arr > 0)
+            elif dic["mask"] == "x<0":
+                z_arr = np.ma.masked_array(z_arr, x_arr < 0)
 
         if "mask_below" in dic.keys():
             z_arr = np.ma.masked_array(z_arr, z_arr < dic["mask_below"])
@@ -310,14 +338,15 @@ class BASIC_PARTS():
                 ax.set_xticks(np.arange(50, 200, 50))
 
         if 'sharey' in dic.keys():
-            if dic['sharey']:
-                ax.set_yticklabels([])
-                ax.axes.yaxis.set_ticklabels([])
+            if bool(dic['sharey']):
+                # pass
+                # ax.set_yticklabels([])
+                # ax.axes.yaxis.set_ticklabels([])
                 ax.set_ylabel('')
                 ax.tick_params(labelleft=False)
 
         if 'sharex' in dic.keys():
-            if dic['sharex']:
+            if bool(dic['sharex']):
                 ax.set_xticklabels([])
                 ax.axes.xaxis.set_ticklabels([])
                 ax.set_xlabel('')
@@ -401,6 +430,13 @@ class BASIC_PARTS():
             if dic['mark_end']:
                 dic_mark = dic['mark_end']
                 self.plot_generic_line(ax, dic_mark, x_arr[-1], y_arr[-1])
+
+        if 'marker' in dic.keys() and 'arrow' in dic.keys():
+            if dic['arrow'] != None:
+                if dic['arrow'] == 'up':
+                    for x, y in zip([x_arr], [y_arr]):
+                        ax.annotate('', xy=(x, y), xytext=(0, 20), textcoords='offset points',
+                                    arrowprops=dict(arrowstyle="<|-"))
 
         return 0
 
@@ -510,7 +546,17 @@ class PLOT_TASK(BASIC_PARTS):
             z_arr = z_arr / np.sum(z_arr)
             z_arr = np.maximum(z_arr, z_arr.min())
 
+            if dic["v_n_x"] == "theta":
+                x_arr = 90 - (x_arr * 180 / np.pi)
+            if dic["v_n_y"] == "theta":
+                y_arr = 90 - (y_arr * 180 / np.pi)
+                # print(y_arr)
+                # exit(1)
+
+
             im = self.plot_colormesh(ax, dic, x_arr, y_arr, z_arr)
+
+
 
         elif dic['dtype'] == "int":
 
@@ -1005,6 +1051,8 @@ class PLOT_TASK(BASIC_PARTS):
             mass = mass / np.sum(mass)
             mass = np.maximum(mass, 1e-15)  # WHAT'S THAT?
 
+        # print(mass)
+
         return self.plot_colormesh(ax, dic, x_arr, y_arr, mass)
 
 
@@ -1147,10 +1195,12 @@ class PLOT_MANY_TASKS(PLOT_TASK):
             "type": "cartesian",
             "subplots_adjust_h": 0.2,
             "subplots_adjust_w": 0.3,
-            "fancy_ticks": True,
-            "minorticks_on": True,
+            "fancy_ticks": False,
+            "minorticks_on": False,
             "invert_y": False,
-            "invert_x": False
+            "invert_x": False,
+            "sharex": False,
+            "sharey": False
         }
 
         self.set_plot_dics = []
@@ -1217,11 +1267,6 @@ class PLOT_MANY_TASKS(PLOT_TASK):
             for n_row in range(self.n_rows):
                 for n_col in range(self.n_cols):
 
-                    # if 'hight' in plotdic:
-                    #     if plotdic['hight'] != None:
-                    #         hei
-
-
                     if n_col == 0 and n_row == 0:
                         sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i)#, aspect=aspect)#, adjustable='box')
                     elif n_col == 0 and n_row > 0:
@@ -1257,7 +1302,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                             sbplot_matrix[n_col][n_row].set_aspect(aspect)
                         # sbplot_matrix[n_col][n_row].axes.get_yaxis().set_visible(False)
                     # sbplot_matrix[n_col][n_row].set_aspect(aspect)#fig.add_subplot(n_rows, n_cols, i)
-                    i += 1
+                    i = i + 1
 
         elif self.gen_set['type'] == 'polar':
             # initializing the matrix with dummy axis objects
@@ -1281,7 +1326,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                         sbplot_matrix[n_col][n_row] = self.figure.add_subplot(self.n_rows, self.n_cols, i, projection='polar')
                                                                       # sharex=self.sbplot_matrix[n_col][0],
                                                                       # sharey=self.sbplot_matrix[0][n_row])
-                    i += 1
+                    i = i + 1
 
                         # sbplot_matrix[n_col][n_row].axes.get_yaxis().set_visible(False)
                     # sbplot_matrix[n_col][n_row] = fig.add_subplot(n_rows, n_cols, i)
@@ -1302,10 +1347,22 @@ class PLOT_MANY_TASKS(PLOT_TASK):
 
         for n_row in range(self.n_rows):
             for n_col in range(self.n_cols):
+
+                ax = self.sbplot_matrix[n_col][n_row]
+                ax.clear()
+                ax.cla()
+                ax.set_xscale("linear")
+                ax.set_yscale("linear")
+                ax.set_xlim(0.1, 100.)
+                ax.set_ylim(0.1, 100.)
+
                 for dic in self.set_plot_dics:
-                    if n_col + 1 == int(dic['position'][1]) and n_row + 1 == int(dic['position'][0]):
+                    if (n_col + 1) == int(dic['position'][1]) and (n_row + 1) == int(dic['position'][0]):
                         print("\tPlotting n_row:{} n_col:{}".format(n_row, n_col))
-                        ax = self.sbplot_matrix[n_col][n_row]
+
+                        # ax
+                        self.set_min_max_scale(ax, dic, n_col, n_row)
+
                         print("\t\tsubplot:{}".format(ax))
                         # dic = self.plot_dic_matrix[n_col][n_row]
                         if isinstance(dic, int):
@@ -1314,58 +1371,69 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                         else:
                             dic = dict(dic)
                             im = self.plot_task(ax, dic)
-
                             if not isinstance(im, int):
                                 image_matrix[n_col][n_row] = im
-
+                                self.plot_one_cbar(im, dic, n_row, n_col)
                             self.set_plot_title(ax, dic)
-                            # self.account_for_shared(ax, n_row, n_col)
-                            self.set_min_max_scale(ax, dic)
                             self.set_xy_labels(ax, dic)
                             self.set_legend(ax, dic)
                             self.remover_some_ticks(ax, dic)
                             self.plot_text(ax, dic)
                             self.add_fancy_to_ax(ax, dic)
-                            if 'aspect' in dic:
+
+                            # self.set_min_max_scale(ax, dic, n_col, n_row)
+
+                            if 'aspect' in dic.keys():
                                 ax.set_aspect(dic['aspect'])
+                            # self.sbplot_matrix[n_col][n_row] = ax
+                    # ax = self.sbplot_matrix[n_col][n_row]
+                    # ax.clear()
+                    # ax.cla()
+        # for dic in self.set_plot_dics:
+        #     for n_row in range(self.n_rows):
+        #         for n_col in range(self.n_cols):
+        #             if n_col + 1 == int(dic['position'][1]) and n_row + 1 == int(dic['position'][0]):
+        #                 ax = self.set_min_max_scale(dic, n_col, n_row)
+        #                 break
+        #                 break
 
         return image_matrix
 
-    def account_for_shared(self, ax, n_row, n_col):
-
-        ax.axes.xaxis.set_ticklabels([])
-        ax.axes.yaxis.set_ticklabels([])
-
-        if n_col > 0 and n_row < self.n_rows:
-            # ax.tick_params(labelbottom=False)
-            # ax.tick_params(labelleft=False)
-            #
-            # ax.set_yticklabels([])
-            # ax.set_xticklabels([])
-            #
-            # ax.get_yaxis().set_ticks([])
-            #
-            # ax.set_yticks([])
-            # ax.set_yticklabels(labels=[])
-            # # ax.set_yticklabels([]).remove()
-
-            # ax.axes.get_xaxis().set_visible(False)
-            # ax.axes.get_yaxis().set_visible(False)
-
-            ax.axes.xaxis.set_ticklabels([])
-            ax.axes.yaxis.set_ticklabels([])
-
-            # ax.tick_params(labelbottom=False)
-            # ax.tick_params(labelleft=False)
-            # ax.tick_params(labelright=False)
-
-            # ax.get_yaxis().set_visible(False)
-
-        if n_col > 0:
-            ax.set_ylabel('')
-
-        if n_row != self.n_rows-1:
-            ax.set_xlabel('')
+    # def account_for_shared(self, ax, n_row, n_col):
+    #
+    #     ax.axes.xaxis.set_ticklabels([])
+    #     ax.axes.yaxis.set_ticklabels([])
+    #
+    #     if n_col > 0 and n_row < self.n_rows:
+    #         # ax.tick_params(labelbottom=False)
+    #         # ax.tick_params(labelleft=False)
+    #         #
+    #         # ax.set_yticklabels([])
+    #         # ax.set_xticklabels([])
+    #         #
+    #         # ax.get_yaxis().set_ticks([])
+    #         #
+    #         # ax.set_yticks([])
+    #         # ax.set_yticklabels(labels=[])
+    #         # # ax.set_yticklabels([]).remove()
+    #
+    #         # ax.axes.get_xaxis().set_visible(False)
+    #         # ax.axes.get_yaxis().set_visible(False)
+    #
+    #         ax.axes.xaxis.set_ticklabels([])
+    #         ax.axes.yaxis.set_ticklabels([])
+    #
+    #         # ax.tick_params(labelbottom=False)
+    #         # ax.tick_params(labelleft=False)
+    #         # ax.tick_params(labelright=False)
+    #
+    #         # ax.get_yaxis().set_visible(False)
+    #
+    #     if n_col > 0:
+    #         ax.set_ylabel('')
+    #
+    #     if n_row != self.n_rows-1:
+    #         ax.set_xlabel('')
 
     def plot_one_cbar(self, im, idic, n_row, n_col):
 
@@ -1374,7 +1442,7 @@ class PLOT_MANY_TASKS(PLOT_TASK):
             if not isinstance(cdic, dict):
                 raise NameError("'cbar' must be dic")
             if len(cdic.keys()) > 0 :
-
+                print("\tColobar for n_row:{} n_col:{}".format(n_row, n_col))
                 location = cdic["location"].split(' ')[0]
                 shift_h = float(cdic["location"].split(' ')[1])
                 shift_w = float(cdic["location"].split(' ')[2])
@@ -1382,26 +1450,27 @@ class PLOT_MANY_TASKS(PLOT_TASK):
 
 
                 if location == 'right':
-                    ax_to_use = self.sbplot_matrix[-1][n_row]
+                    ax_to_use = self.sbplot_matrix[n_col][n_row]
                     pos1 = ax_to_use.get_position()
                     pos2 = [pos1.x0 + pos1.width + shift_h,
                             pos1.y0 + shift_w,
                             cbar_width,
                             pos1.height]
                 elif location == 'left':
-                    ax_to_use = self.sbplot_matrix[-1][n_row]
+                    ax_to_use = self.sbplot_matrix[n_col][n_row]
                     pos1 = ax_to_use.get_position()
                     pos2 = [pos1.x0 - pos1.width - shift_h,
-                            pos1.y0,
+                            pos1.y0 + shift_w,
                             cbar_width,
                             pos1.height]
                 elif location == 'bottom':
-                    ax_to_use = self.sbplot_matrix[n_col][-1]
+                    cbar_width = 0.02
+                    ax_to_use = self.sbplot_matrix[n_col][n_row]
                     pos1 = ax_to_use.get_position()
-                    pos2 = [pos1.x0,
-                            pos1.y0 - pos1.height + shift_w,
-                            cbar_width,
-                            pos1.height]
+                    pos2 = [pos1.x0 + shift_w,
+                            pos1.y0 + shift_h,
+                            pos1.width,
+                            cbar_width]
                 else:
                     raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
                                     .format(location))
@@ -1419,14 +1488,28 @@ class PLOT_MANY_TASKS(PLOT_TASK):
                         cbar = plt.colorbar(im, cax=cax1, extend='both')
                     cax1.yaxis.set_ticks_position('left')
                     cax1.yaxis.set_label_position('left')
+                elif location == 'bottom':
+                    if 'fmt' in cdic.keys() and cdic['fmt'] != None:
+                        cbar = plt.colorbar(im, cax=cax1, orientation="horizontal", extend='both', format=cdic['fmt'])  # , format='%.1e')
+                    else:
+                        cbar = plt.colorbar(im, cax=cax1, orientation="horizontal", extend='both')
+                    cax1.yaxis.set_ticks_position('left')
+                    cax1.yaxis.set_label_position('left')
+
                 else:
                     raise NameError("cbar location {} not recognized. Use 'right' or 'bottom' "
                                     .format(location))
                 if 'label' in cdic.keys() and cdic['label'] != None:
-                    cbar.ax.set_title(cdic['label'], fontsize=cdic["fontsize"])
+                    if location != "bottom":
+                        cbar.ax.set_title(cdic['label'], fontsize=cdic["fontsize"])
+                    else:
+                        cbar.set_label(cdic['label'], fontsize=cdic["fontsize"])
 
                 else:
-                    cbar.ax.set_title(r"{}".format(str(cdic["v_n"]).replace('_', '\_')), fontsize=cdic["fontsize"])
+                    if location != "bottom":
+                        cbar.ax.set_title(r"{}".format(str(cdic["v_n"]).replace('_', '\_')), fontsize=cdic["fontsize"])
+                    else:
+                        cbar.set_label(r"{}".format(str(cdic["v_n"]).replace('_', '\_')), fontsize=cdic["fontsize"])
 
                 cbar.ax.tick_params(labelsize=cdic["labelsize"])
 
@@ -1436,7 +1519,6 @@ class PLOT_MANY_TASKS(PLOT_TASK):
             for n_col in range(self.n_cols):
                 for dic in self.set_plot_dics:
                     if n_col + 1 == int(dic['position'][1]) and n_row + 1 == int(dic['position'][0]):
-                        print("\tColobar for n_row:{} n_col:{}".format(n_row, n_col))
                         # ax  = self.sbplot_matrix[n_col][n_row]
                         # dic = self.plot_dic_matrix[n_col][n_row]
                         im  = self.image_matrix[n_col][n_row]
@@ -1470,7 +1552,26 @@ class PLOT_MANY_TASKS(PLOT_TASK):
         # plt.tight_layout()
         plt.savefig('{}{}'.format(self.gen_set["figdir"], self.gen_set["figname"]),
                     bbox_inches='tight', dpi=self.gen_set["dpi"])
+
+        # clean up
+        # for n_row in range(self.n_rows):
+        #     for n_col in range(self.n_cols):
+        #         for dic in self.set_plot_dics:
+        #             if n_col + 1 == int(dic['position'][1]) and n_row + 1 == int(dic['position'][0]):
+        #                 ax = self.sbplot_matrix[n_col][n_row]
+        #                 plt.delaxes(ax)
         plt.close()
+
+    def set_scales_limits(self):
+
+        for n_row in range(self.n_rows):
+            for n_col in range(self.n_cols):
+                for dic in self.set_plot_dics:
+                    if (n_col + 1) == int(dic['position'][1]) and (n_row + 1) == int(dic['position'][0]):
+                        ax = self.sbplot_matrix[n_col][n_row]
+
+                        self.set_min_max_scale(ax, dic, n_col, n_row)
+
 
     def main(self):
 
@@ -1484,11 +1585,16 @@ class PLOT_MANY_TASKS(PLOT_TASK):
         self.plot_dic_matrix = self.set_plot_dics_matrix()
         # initializing the axis matrix (for all subplots) and image matrix fo colorbars
         self.sbplot_matrix = self.set_plot_matrix()
+
+        # self.set_scales_limits()
+
         # plotting
-        print(self.sbplot_matrix)
+        # print(self.sbplot_matrix)
         self.image_matrix = self.plot_images()
+
+
         # adding colobars
-        self.plot_colobars()
+        # self.plot_colobars()
 
         # saving the result
         self.save_plot()
@@ -1501,3 +1607,4 @@ class PLOT_MANY_TASKS(PLOT_TASK):
 
         # self.figure.delaxes(self.sbplot_matrix)
         self.figure.clear()
+        self.figure.clf()

@@ -93,7 +93,8 @@ from d3analysis import MAINMETHODS_STORE, LOAD_PROFILE_XYXZ
 
 ''' ==============================================| SETTINGS |====================================================== '''
 task_list = ["init_data", "berntime", "tmerg_tcoll", "update_status", "print_status", "print_ppr_status", "d1plots",
-             "analyze.sh", "d3all", "d3allplots", "d3dmplot", "d2movies", "d2movie", "d2plots"]
+             "d3all", "d3allplots", "d3dmplot", "d2movies", "d2movie", "d2plots"] + \
+            ["analyze.sh", "outflowed_0", "outflowed_0_b_w", "outflowed_0_b_w_pc", "collated", "waveforms"]
 general_plots=["berntime"]
 __d1plots__ =  ["correlations_vinf", "correlations_ye",
                 "ejecta_profile_dyn", "ejecta_profile_dyn_bern", "histograms", "yields"]
@@ -104,9 +105,9 @@ __d3slicesvns__ = ["x", "y", "z", "rho", "w_lorentz", "vol", "press", "eps", "la
             "ang_mom", "ang_mom_flux", "theta", "r", "phi" ]
 __d3slicesplanes__ = ["xy", "xz"]
 __d3dmass__ = ["disk_mass"]
-__d3corrs__ = ["rho_r", "rho_Ye", "temp_Ye", "rho_theta", "velz_theta", "rho_ang_mom",
+__d3corrs__ = ["rho_r", "rho_Ye", "temp_Ye", "rho_theta", "velz_theta", "rho_ang_mom", "velz_Ye",
                  "rho_ang_mom_flux", "rho_dens_unb_bern", "ang_mom_flux_theta",
-                 "ang_mom_flux_dens_unb_bern", "inv_ang_mom_flux_dens_unb_bern"]
+                 "ang_mom_flux_dens_unb_bern", "inv_ang_mom_flux_dens_unb_bern", "velz_dens_unb_bern", "Ye_dens_unb_bern", "theta_dens_unb_bern"]
 __d3sliceplotvns__ = ["ang_mom_flux","ang_mom","dens_unb_garch","dens_unb_bern","dens_unb_geo","vr","vphi","enthalpy",
          "density","Ye","temp","velz","vely","velx","lapse","eps","press","vol","w_lorentz","rho"]
 __d3dm__ = ["density_modes_lap15"]
@@ -114,6 +115,24 @@ scrdic = "/data01/numrel/vsevolod.nedora/scripts_server/"
 reslist= ["*.done", "output-0003/parfile.par", "berntime.*", "WARNING*",
           "outflow*", "collated*", "waveforms", "ittime.h5"]
 nlevels = 7
+crit_lbl = {"_0": "Dyn.",
+            "_0_b_w": "Wind",
+            "_0_b_w_pc": "Wind (pc)",
+            "_0 _0_b_w": "Dyn.+Wind",
+            "_0 _0_b_w _0_b_w_pc": "Dyn.+Wind+Wind (pc)"
+            }
+crit_color = {"_0": "red",
+              "_0_b_w": "blue",
+              "_0_b_w_pc": "lightblue"}
+
+crit_ls = {"_0": '--',
+           "_0_b_w": '--',
+           "_0_b_w_pc": '--'}
+
+nuc_crit_lbl = {"_0": "Dyn.",
+            "_0_b_w": "Dyn.+Wind",
+            "_0_b_w_pc": "Dyn.+Wind+Wind (pc)"
+            }
 ''' ===========================================| PreProcessing |==================================================== '''
 
 class PRINT_SIM_PPR_STATUS(LOAD_ITTIME):
@@ -162,6 +181,7 @@ class PRINT_SIM_PPR_STATUS(LOAD_ITTIME):
         #         Printcolor.green("\tinit_data.csv is computed and saved")
         # else:
         #     Printcolor.green("\tinit_data.csv is present")
+
 
         self.tgw, self.tppr = self.print_gw_ppr_time()
         self.print_assert_collated_data()
@@ -257,7 +277,7 @@ class PRINT_SIM_PPR_STATUS(LOAD_ITTIME):
 
         if not os.path.isfile(self.path_out_data + self.file_for_ppr_time):
             Printcolor.red("\tNo collated files; exiting...")
-            exit(0)
+            return 0, 0
 
         isdata, gw_iterations, gw_timesteps = self.get_ittime("overall", d1d2d3prof="d1")
 
@@ -360,91 +380,14 @@ class PRINT_SIM_PPR_STATUS(LOAD_ITTIME):
     ''' --- POSTPROCESSING --- '''
 
     def print_assert_collated_data(self, comma=False):
-        dir = self.path_out_data + '/collated/'
-        flist = copy.deepcopy(Lists.tarball)
-        flist.remove("outflow_surface_det_0_fluxdens.asc")
-        flist.remove("outflow_surface_det_1_fluxdens.asc")
-        Printcolor.blue("\tCollated files ", comma=True)
-        status, missing = \
-            self.print_assert_content(dir, flist, marker1='.', marker2='x')
-
-        if status == "full":
-            Printcolor.green(" complete", comma=True)
-        elif status == "partial":
-            Printcolor.yellow(" partial, ({}) missing".format(len(missing)), comma=True)
-        else:
-            Printcolor.red(" absent", comma=True)
-
-        if comma:
-            print(' '),
-        else:
-            print(' ')
-
-
-    def print_assert_outflow_data(self, criterion='_0', comma=False):
-        dir = self.path_out_data + '/outflow{}/'.format(criterion)
-        flist = copy.deepcopy(Lists.outflow)
-        if not criterion.__contains__("_b"):
-            # if the criterion is not Bernoulli
-            flist.remove("corr_vel_inf_bern_theta.h5", )
-            flist.remove("hist_vel_inf_bern.dat")
-            flist.remove("ejecta_profile_bern.dat")
-
-        if criterion == "_0":
-            name = "geodiesic 0"
-        elif criterion == "_0_b_w":
-            name = "bernoilli 0"
-        else:
-            name = criterion
-
-        Printcolor.blue("\tOutflow {}".format(name), comma=True)
-        status, missing = \
-            self.print_assert_content(dir, flist, marker1='.', marker2='x')
-
-        if status == "full":
-            Printcolor.green(" complete", comma=True)
-        elif status == "partial":
-            Printcolor.yellow(" partial, ({}) missing".format(len(missing)), comma=True)
-        else:
-            Printcolor.red(" absent", comma=True)
-
-        if comma:
-            print(' '),
-        else:
-            print(' ')
-
-
-    def print_assert_gw_data(self, comma=False):
-
-        dir = self.path_out_data + '/waveforms/'
-        flist = copy.deepcopy(Lists.gw)
-        Printcolor.blue("\tGW data files ", comma=True)
-        status, missing = \
-            self.print_assert_content(dir, flist, marker1='.', marker2='x')
-
-        if status == "full":
-            Printcolor.green(" complete", comma=True)
-        elif status == "partial":
-            Printcolor.yellow(" partial, ({}) missing".format(len(missing)), comma=True)
-        else:
-            Printcolor.red(" absent", comma=True)
-
-        if comma:
-            print(' '),
-        else:
-            print(' ')
-
-
-    def print_assert_d1_plots(self, dir_="res_1d/", res=".png", comma=False):
-        dir = self.path_out_data + dir_
-        if os.path.isdir(dir):
-            flist = [plot_ + res for plot_ in __d1plots__]
-            # if not criterion.__contains__("_b"):
-            #     # if the criterion is not Bernoulli
-            #     flist.remove("corr_vel_inf_bern_theta.h5")
-            Printcolor.blue("\tD1 plots", comma=True)
+        try:
+            dir = self.path_out_data + '/collated/'
+            flist = copy.deepcopy(Lists.tarball)
+            flist.remove("outflow_surface_det_0_fluxdens.asc")
+            flist.remove("outflow_surface_det_1_fluxdens.asc")
+            Printcolor.blue("\tCollated files ", comma=True)
             status, missing = \
-                self.print_assert_content(dir, flist)
+                self.print_assert_content(dir, flist, marker1='.', marker2='x')
 
             if status == "full":
                 Printcolor.green(" complete", comma=True)
@@ -457,124 +400,224 @@ class PRINT_SIM_PPR_STATUS(LOAD_ITTIME):
                 print(' '),
             else:
                 print(' ')
+        except:
+            Printcolor.red("\tAsserting Colalted files failed.")
+
+
+
+    def print_assert_outflow_data(self, criterion='_0', comma=False):
+
+        if criterion == "_0":
+            name = "geodiesic 0"
+        elif criterion == "_0_b_w":
+            name = "bernoilli 0"
         else:
-            Printcolor.red("[] absent", comma=False)
+            name = criterion
+
+        dir = self.path_out_data + '/outflow{}/'.format(criterion)
+        Printcolor.blue("\tOutflow {}".format(name), comma=True)
+        try:
+            if not os.path.isdir(dir):
+                Printcolor.red("\tdir: outflowed{} is absent".format(criterion), comma=True)
+                raise IOError("dir: outflowed{} is absent".format(criterion))
+            flist = copy.deepcopy(Lists.outflow)
+            if not criterion.__contains__("_b"):
+                # if the criterion is not Bernoulli
+                flist.remove("corr_vel_inf_bern_theta.h5", )
+                flist.remove("hist_vel_inf_bern.dat")
+                flist.remove("ejecta_profile_bern.dat")
+
+            status, missing = \
+                self.print_assert_content(dir, flist, marker1='.', marker2='x')
+
+            if status == "full":
+                Printcolor.green(" complete", comma=True)
+            elif status == "partial":
+                Printcolor.yellow(" partial, ({}) missing".format(len(missing)), comma=True)
+            else:
+                Printcolor.red(" absent", comma=True)
+
+            if comma:
+                print(' '),
+            else:
+                print(' ')
+        except:
+            Printcolor.red("\tAsserting outflowed{} has failed".format(criterion))
+
+    def print_assert_gw_data(self, comma=False):
+        Printcolor.blue("\tGW data files ", comma=True)
+        dir = self.path_out_data + '/waveforms/'
+        try:
+            if not os.path.isdir(dir):
+                Printcolor.red("\t\twaveformes dir is absent", comma=True)
+                raise IOError("waveforms dir is absent")
+
+            flist = copy.deepcopy(Lists.gw)
+            status, missing = \
+                self.print_assert_content(dir, flist, marker1='.', marker2='x')
+
+            if status == "full":
+                Printcolor.green(" complete", comma=True)
+            elif status == "partial":
+                Printcolor.yellow(" partial, ({}) missing".format(len(missing)), comma=True)
+            else:
+                Printcolor.red(" absent", comma=True)
+
+            if comma:
+                print(' '),
+            else:
+                print(' ')
+        except:
+            Printcolor.red("\t\tAsserting 'gw' data has failed")
+
+    def print_assert_d1_plots(self, dir_="res_1d/", res=".png", comma=False):
+        Printcolor.blue("\tD1 plots", comma=True)
+        try:
+            dir = self.path_out_data + dir_
+            if not os.path.isdir(dir):
+                Printcolor.red("\tdir '{}' is absent".format(dir_), comma=True)
+                raise IOError()
+            else:
+                flist = [plot_ + res for plot_ in __d1plots__]
+                # if not criterion.__contains__("_b"):
+                #     # if the criterion is not Bernoulli
+                #     flist.remove("corr_vel_inf_bern_theta.h5")
+                status, missing = \
+                    self.print_assert_content(dir, flist)
+
+                if status == "full":
+                    Printcolor.green(" complete", comma=True)
+                elif status == "partial":
+                    Printcolor.yellow(" partial, ({}) missing".format(len(missing)), comma=True)
+                else:
+                    Printcolor.red(" absent", comma=True)
+
+                if comma:
+                    print(' '),
+                else:
+                    print(' ')
+        except:
+            Printcolor.red("\tAsserting '{}' has failed".format(dir_))
 
     def assert_d2_movies(self, dir_="res_2d/", extension=".mp4", comma=False):
 
+        Printcolor.blue("\tD2 movies, rl:", comma=True)
         isd2, itd2, td2 = self.get_ittime("overall", d1d2d3prof="d2")
 
-        Printcolor.blue("\tD2 movies, rl:", comma=True)
-        v_ns = __d2movievns__
+        try:
+            v_ns = __d2movievns__
+            missing = []
+            outdated = []
+            for rl in [0, 1, 2, 3, 4, 5, 6]:
+                Printcolor.blue("{}".format(rl), comma=True),
+                print('['),
+                for v_n in v_ns:
+                    moviedir = v_n + "_rl" + str(rl) + "_movie/"
+                    moviename = v_n + "_rl" + str(rl) + extension
 
-        missing = []
-        outdated = []
-        for rl in [0, 1, 2, 3, 4, 5, 6]:
-            Printcolor.blue("{}".format(rl), comma=True),
-            print('['),
-            for v_n in v_ns:
-                moviedir = v_n + "_rl" + str(rl) + "_movie/"
-                moviename = v_n + "_rl" + str(rl) + extension
-
-                # moviedir = str(v_n) + "_movie" + '/'
-                # print(self.path_out_data+dir_+moviedir)
-                # assert os.path.isdir(self.path_out_data + dir_ + moviedir)
-                if os.path.isdir(self.path_out_data + dir_ + moviedir):
-                    max_file = max(glob(self.path_out_data + dir_ + moviedir + "???????.png"))
-                    int_max_file = int(str(max_file.split('/')[-1]).split('.png')[0])
-                    is_movie = os.path.isfile(self.path_out_data + dir_ + moviedir + moviename)
-                    if is_movie and itd2[-1] == int_max_file:
-                        Printcolor.green(".", comma=True)
-                    elif is_movie and itd2 != int_max_file:
-                        Printcolor.yellow(".", comma=True)
-                        outdated.append(v_n)
+                    # moviedir = str(v_n) + "_movie" + '/'
+                    # print(self.path_out_data+dir_+moviedir)
+                    # assert os.path.isdir(self.path_out_data + dir_ + moviedir)
+                    if os.path.isdir(self.path_out_data + dir_ + moviedir):
+                        max_file = max(glob(self.path_out_data + dir_ + moviedir + "???????.png"))
+                        int_max_file = int(str(max_file.split('/')[-1]).split('.png')[0])
+                        is_movie = os.path.isfile(self.path_out_data + dir_ + moviedir + moviename)
+                        if is_movie and itd2[-1] == int_max_file:
+                            Printcolor.green(".", comma=True)
+                        elif is_movie and itd2 != int_max_file:
+                            Printcolor.yellow(".", comma=True)
+                            outdated.append(v_n)
+                        else:
+                            Printcolor.red("x", comma=True)
+                            missing.append(v_n)
                     else:
                         Printcolor.red("x", comma=True)
                         missing.append(v_n)
-                else:
-                    Printcolor.red("x", comma=True)
-                    missing.append(v_n)
-            print("]"),
+                print("]"),
 
-        if len(missing) == 0:
-            Printcolor.green(" complete", comma=True)
-        elif len(missing) != len(v_ns):
-            Printcolor.yellow(" partial, ({}) missing".format(len(missing)), comma=True)
-        else:
-            Printcolor.red(" absent", comma=True)
+            if len(missing) == 0:
+                Printcolor.green(" complete", comma=True)
+            elif len(missing) != len(v_ns):
+                Printcolor.yellow(" partial, ({}) missing".format(len(missing)), comma=True)
+            else:
+                Printcolor.red(" absent", comma=True)
 
-        if comma:
-            print(' '),
-        else:
-            print(' ')
+            if comma:
+                print(' '),
+            else:
+                print(' ')
+        except:
+            Printcolor.red("\tAsserting '{}' has failed".format(dir_))
 
 
     def assert_d3_data(self, dir_="res_3d/", comma=False):
 
         isprof, itprof, tprof = self.get_ittime("profiles", d1d2d3prof="prof")
-
         Printcolor.blue("\tD3 (", comma=True)
         Printcolor.green("%d" % len(tprof), comma=True)
         Printcolor.blue(") profiles: ", comma=False)
-        for it, t in zip(itprof, tprof):
-            data_dir = self.path_out_data + dir_ + str(it)
-            if os.path.isdir(data_dir):
-                Printcolor.green("\t {} ({:.1f}[ms])".format(it, t * 1e3), comma=True)
 
-                # disk mass:
-                flist = [v_n + ".txt" for v_n in __d3dmass__]
-                data_dir = self.path_out_data + dir_ + str(it) + "/"
-                assert os.path.isdir(data_dir)
-                status, missing_files = self.print_assert_content(data_dir, flist)
-                # profile.xy.h5
-                flist = ["profile." + v_n + ".h5" for v_n in __d3slicesplanes__]
-                data_dir = self.path_out_data + dir_ + str(it) + "/"
-                assert os.path.isdir(data_dir)
-                status, missing_files = self.print_assert_content(data_dir, flist)
-                # corr_vn1_vn2.h5
-                flist1 = ["corr_" + v_n + ".h5" for v_n in __d3corrs__]
-                flist2 = [v_n + ".png" for v_n in __d3corrs__]
-                data_dir = self.path_out_data + dir_ + str(it) + "/"
-                assert os.path.isdir(data_dir)
-                status, missing_files1, missing_files2 = self.print_assert_contents(data_dir, flist1, flist2)
-                # corr_vn1_vn2.h5
-                flist = [v_n + "_rl0.png" for v_n in __d3sliceplotvns__]
-                data_dir = self.path_out_data + dir_ + str(it) + "/slices/"
-                if not os.path.isdir(data_dir):
-                    os.mkdir(data_dir)
-                status, missing_files = self.print_assert_content(data_dir, flist)
-                print(' ')
+        try:
+            for it, t in zip(itprof, tprof):
+                data_dir = self.path_out_data + dir_ + str(it)
+                if os.path.isdir(data_dir):
+                    Printcolor.green("\t {} ({:.1f}[ms])".format(it, t * 1e3), comma=True)
+
+                    # disk mass:
+                    flist = [v_n + ".txt" for v_n in __d3dmass__]
+                    data_dir = self.path_out_data + dir_ + str(it) + "/"
+                    assert os.path.isdir(data_dir)
+                    status, missing_files = self.print_assert_content(data_dir, flist)
+                    # profile.xy.h5
+                    flist = ["profile." + v_n + ".h5" for v_n in __d3slicesplanes__]
+                    data_dir = self.path_out_data + dir_ + str(it) + "/"
+                    assert os.path.isdir(data_dir)
+                    status, missing_files = self.print_assert_content(data_dir, flist)
+                    # corr_vn1_vn2.h5
+                    flist1 = ["corr_" + v_n + ".h5" for v_n in __d3corrs__]
+                    flist2 = [v_n + ".png" for v_n in __d3corrs__]
+                    data_dir = self.path_out_data + dir_ + str(it) + "/"
+                    assert os.path.isdir(data_dir)
+                    status, missing_files1, missing_files2 = self.print_assert_contents(data_dir, flist1, flist2)
+                    # corr_vn1_vn2.h5
+                    flist = [v_n + "_rl0.png" for v_n in __d3sliceplotvns__]
+                    data_dir = self.path_out_data + dir_ + str(it) + "/slices/"
+                    if not os.path.isdir(data_dir):
+                        os.mkdir(data_dir)
+                    status, missing_files = self.print_assert_content(data_dir, flist)
+                    print(' ')
+                else:
+                    Printcolor.red("\t {} ({:.1f}[ms]) [] absent".format(it, t * 1e3), comma=False)
+
+            # # disk mass:
+            # flist = [v_n + ".txt" for v_n in __d3dmass__]
+            # for it, t in zip(itprof, tprof):
+            #     data_dir = self.path_out_data + dir_ + str(it) + "/"
+            #     status, missing_files = self.print_assert_content(data_dir, flist)
+            #
+            # # profile.xy.h5
+            # flist = ["profile." + v_n + ".h5" for v_n in __d3slicesplanes__]
+            # for it, t in zip(itprof, tprof):
+            #     data_dir = self.path_out_data + dir_ + str(it) + "/"
+            #     status, missing_files = self.print_assert_content(data_dir, flist)
+            #
+            # # corr_vn1_vn2.h5
+            # flist = ["corr_" + v_n + ".h5" for v_n in __d3corrs__]
+            # for it, t in zip(itprof, tprof):
+            #     data_dir = self.path_out_data + dir_ + str(it) + "/"
+            #     status, missing_files = self.print_assert_content(data_dir, flist)
+            #
+            # flist = [v_n + "rl0.png" for v_n in __d3sliceplotvns__]
+            # for it, t in zip(itprof, tprof):
+            #     data_dir = self.path_out_data + dir_ + str(it) + "/"
+            #     status, missing_files = self.print_assert_content(data_dir, flist)
+
+            if comma:
+                print(' '),
             else:
-                Printcolor.red("\t {} ({:.1f}[ms]) [] absent".format(it, t * 1e3), comma=False)
-
-        # # disk mass:
-        # flist = [v_n + ".txt" for v_n in __d3dmass__]
-        # for it, t in zip(itprof, tprof):
-        #     data_dir = self.path_out_data + dir_ + str(it) + "/"
-        #     status, missing_files = self.print_assert_content(data_dir, flist)
-        #
-        # # profile.xy.h5
-        # flist = ["profile." + v_n + ".h5" for v_n in __d3slicesplanes__]
-        # for it, t in zip(itprof, tprof):
-        #     data_dir = self.path_out_data + dir_ + str(it) + "/"
-        #     status, missing_files = self.print_assert_content(data_dir, flist)
-        #
-        # # corr_vn1_vn2.h5
-        # flist = ["corr_" + v_n + ".h5" for v_n in __d3corrs__]
-        # for it, t in zip(itprof, tprof):
-        #     data_dir = self.path_out_data + dir_ + str(it) + "/"
-        #     status, missing_files = self.print_assert_content(data_dir, flist)
-        #
-        # flist = [v_n + "rl0.png" for v_n in __d3sliceplotvns__]
-        # for it, t in zip(itprof, tprof):
-        #     data_dir = self.path_out_data + dir_ + str(it) + "/"
-        #     status, missing_files = self.print_assert_content(data_dir, flist)
-
-        if comma:
-            print(' '),
-        else:
-            print(' ')
-
+                print(' ')
+        except:
+            Printcolor.red("\tAsserting '{}' has failed".format(dir_))
     #
     #
     #
@@ -740,6 +783,13 @@ def get_bern_time(sim, fraction = 0.98, berntimefile = "berntime.txt", plot = "b
         raise ValueError("{}percent of ejecta is found at last iteration. Cannot use for Bernoulli"
                          .format(fraction * 100))
 
+    if times[idx_] * 0.004925794970773136 > 40.:
+        crit = fraction - 0.03
+        Printcolor.red("Warning. tbern: {:.1f} > 40ms. Decreasing the fraction from {} to {}"
+                       .format(times[idx_] * 0.004925794970773136, fraction, crit))
+        get_bern_time(sim, fraction=crit, berntimefile=berntimefile, plot=plot)
+        exit(0)
+
     if times[idx_] > 0.95 * times.max():
         Printcolor.yellow("\tWarning! Berntime is {}percent of the total time".format(times[idx_] * 100 / times.max()))
 
@@ -760,14 +810,14 @@ def get_bern_time(sim, fraction = 0.98, berntimefile = "berntime.txt", plot = "b
 
         import matplotlib.pyplot as plt
 
-        Printcolor.blue("\tPlotting {}".format(simdir + '{}.png'.format(plot)))
+        Printcolor.blue("\tPlotting {}".format(simdir + '{}'.format(plot)))
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
-        ax.axvline(x=times[idx_] * 0.004925794970773136 * 1e-3, color='black', lw='0.5', label='Bern time')
-        ax.plot(times * 0.004925794970773136 * 1e-3, masses2 * 1e2, '-', color='black', label='Bernoulli wind')
-        ax.plot(times * 0.004925794970773136 * 1e-3, masses1 * 1e2, '-', color='gray', label='Geodesic')
-        ax.set_xlabel(r'time $[M_{\odot}$]', fontsize=12)
+        ax.axvline(x=times[idx_] * 0.004925794970773136, color='black', lw='0.5', label='Bern time')
+        ax.plot(times * 0.004925794970773136, masses2 * 1e2, '-', color='black', label='Mass Flux')
+        # ax.plot(times * 0.004925794970773136 * 1e-3, masses1 * 1e2, '-', color='gray', label='Geodesic')
+        ax.set_xlabel(r'time $[s]$', fontsize=12)
         ax.set_ylabel(r'$M_{ej}$ $[10^{-2}M_{\odot}]$', fontsize=12)
         ax.minorticks_on()
         ax.set_title('Outflow', fontsize=20)
@@ -949,48 +999,120 @@ def tmerg_tcoll(sim, fraction=0.01):
     :return:
     """
 
+    c_dir = Paths.ppr_sims + sim + '/' + "collated/"
+    w_dir = Paths.ppr_sims + sim + '/' + "waveforms/"
+    simdir = Paths.gw170817 + sim + '/'
+
+    dens_fname = "dens.norm1.asc"
     strain_fname = "strain_l2_m2.dat"
     outfile_tmerg = "tmerger2.dat"
     outfile_tcoll = "tcoll.dat"
+    outfile_colltime = "colltime.txt"
+    outfile_tdens_drop = "tdens_drop.txt"
     plot_name = "tmergtcoll.png"
 
     if os.path.isdir(Paths.ppr_sims + sim + '/' + "waveforms/") and \
             os.path.isfile(Paths.ppr_sims + sim + '/' + "waveforms/" + strain_fname):
 
-        w_dir = Paths.ppr_sims + sim + '/' + "waveforms/"
-        strain_file = w_dir + strain_fname
+        # --- DENSITY
+        dens_drop = 10
+        _time, dens = np.genfromtxt(c_dir+dens_fname, unpack=True, usecols=[1, 2])
+        assert len(_time) == len(dens)
+        maxD = np.max(dens)
+        _time = np.array(_time)
+        dens = np.array(dens)
+        tmp = np.where(dens < (maxD / dens_drop))
+        # print(tmp)
+        # exit(1)
+        if np.array(tmp, dtype=float).any():
+            indx_dens_drop = np.min(tmp)
+            tdens_drop = _time[indx_dens_drop]
+            Printcolor.blue("\tDensity drops by:{} at time:{}".format(dens_drop, tdens_drop))
+        else:
+            tdens_drop = np.nan
+            Printcolor.blue("\tDensity does not drop by:{}".format(dens_drop))
 
+        # --- GW ---
+        strain_file = w_dir + strain_fname
         time, reh, imh = np.genfromtxt(strain_file, unpack=True, usecols=[0, 1, 2])
         h = reh + 1j * imh
         amp = np.abs(h)
         tmerg = time[np.argmax(amp)]
-        time -= tmerg
 
-        maxA = np.max(amp)
-        indx_collapse = np.min(np.where((amp < fraction * maxA) & (time >= 0)))
-        tcoll = time[indx_collapse]
-        tmerg = 0
-        print "tmerg: {:.4f}".format(tmerg)
-        print "tcoll: {:.4f}".format(tcoll)
+        # if BH formation is found by the density drop:
+        if not np.isnan(tdens_drop):
+            maxA = np.max(amp)
+            indx_collapse = np.min(np.where((amp < fraction * maxA) & (time >= tmerg)))
+            tcoll = time[indx_collapse]
+        else:
+            tcoll = np.nan
 
-        Printcolor.blue("\tSaving t merger:   {}".format(w_dir + outfile_tmerg))
-        open(w_dir+ outfile_tmerg, "w").write("{}\n".format(float(tmerg)))
-        Printcolor.blue("\tSaving t collapse: {}".format(w_dir + outfile_tmerg))
-        open(w_dir+ outfile_tcoll, "w").write("{}\n".format(float(tcoll)))
+        # printing results
+        print("\ttdensdrop: {:.4f}".format(tdens_drop))
+        print("\ttmerg:     {:.4f}".format(tmerg))
+        print("\ttcoll:     {:.4f}".format(tcoll))
+        print("\ttend:      {:.4f}".format(time[-1]))
 
-        f = plt.figure()
-        plt.plot(time, reh, c='k')
-        plt.plot(time, amp, c='r', label="amplitude")
-        plt.axvline(tmerg, ls='-.', c='b', label="tmerg")
-        plt.axvline(tcoll, ls='-.', c='c', label="tcoll")
+        # saving files
+        Printcolor.blue("\tSaving tmerg:   {}".format(w_dir + outfile_tmerg))
+        open(w_dir + outfile_tmerg, "w").write("{}\n".format(float(tmerg)))
+        if not np.isnan(tdens_drop):
+            Printcolor.blue("\tSaving tdens_drop:   {}".format(w_dir + outfile_tdens_drop))
+            open(w_dir + outfile_tdens_drop, "w").write("{}\n".format(float(tdens_drop)))
+        if not np.isnan(tcoll):
+            Printcolor.blue("\tSaving t collapse: {}".format(w_dir + outfile_tcoll))
+            open(w_dir + outfile_tcoll, "w").write("{}\n".format(float(tcoll)))
+            if os.path.isdir(simdir):
+                Printcolor.blue("\tSaving {} (for outflowed.cc)".format(simdir + outfile_colltime))
+                open(simdir + outfile_colltime, "w").write("{}\n".format(float(tcoll)))
+            else:
+                Printcolor.yellow("\t{} is not saved. Dir: {} is not found".format(outfile_colltime, simdir))
 
-        plt.ylabel(r'strain [Re]', fontsize=12)
-        plt.xlabel(r'time [s]', fontsize=12)
-        plt.minorticks_on()
-        plt.xticks(fontsize=12)
-        plt.yticks(fontsize=12)
+
+        fig, ax1 = plt.subplots()
+
+        color = 'tab:red'
+        ax1.set_ylabel(r'strain [Re]', fontsize=12)
+        ax1.set_xlabel(r'time $[M_{\odot}]$', fontsize=12)
+        ax1.plot(time, reh, c='k')
+        ax1.plot(time, amp, c='red', label="amplitude")
+        ax1.axvline(tmerg, ls='-.', c="orange", label="tmerg")
+        if not np.isnan(tcoll):
+            ax1.axvline(tcoll, ls='-.', c=color, label="tcoll")
+        # ax1.tick_params(axis='y', labelcolor=color, fontsize=12)
+        ax1.tick_params(
+            axis='y', labelleft=True, labelcolor=color,
+            # labelright=False, tick1On=True, tick2On=True,
+            labelsize=12,
+            direction='in',
+            # bottom=True, top=True, left=True, right=True
+        )
+        ax1.minorticks_on()
+
+        ax2 = ax1.twinx()
+
+        color = 'tab:blue'
+        ax2.set_ylabel("log(" + dens_fname + ")", color=color)
+        ax2.plot(_time, np.log10(dens), color=color)
+        if not np.isnan(tdens_drop):
+            ax1.axvline(tdens_drop, ls='-.', c=color, label="tdens_drop")
+        # ax2.tick_params(axis='y', labelcolor=color, fontsize=12)
+        ax2.tick_params(
+            axis='y', labelright=True, labelcolor=color,
+            # labelright=False, tick1On=True, tick2On=True,
+            labelsize=12,
+            direction='in',
+            # bottom=True, top=True, left=True, right=True
+        )
+        ax2.minorticks_on()
+
+        # plt.minorticks_on()
+        # plt.xticks(fontsize=12)
+        # plt.yticks(fontsize=12)
         plt.title('GW analysis', fontsize=20)
-        plt.legend(loc='upper right', numpoints=1)
+        plt.legend(loc='upper right')
+
+        fig.tight_layout()  # otherwise the right y-label is slightly clipped
         plt.savefig(w_dir + plot_name, bbox_inches='tight', dpi=128)
         plt.close()
     else:
@@ -1011,7 +1133,7 @@ def ejecta_profiles(sim, d1class, plot_bern = True, fig_dir ='res_1d/', figname 
     o_plot = PLOT_MANY_TASKS()
     o_plot.gen_set["figdir"] = resdir + fig_dir
     o_plot.gen_set["type"] = "cartesian"
-    o_plot.gen_set["dpi"] = 512
+    o_plot.gen_set["dpi"] = 128
     o_plot.gen_set["figsize"] = (4.2, 3.5)  # <->, |]
     o_plot.gen_set["figname"] = figname
     o_plot.gen_set["sharex"] = False
@@ -1067,6 +1189,112 @@ def ejecta_profiles(sim, d1class, plot_bern = True, fig_dir ='res_1d/', figname 
     Printcolor.blue("\tPlotting ejecta profile is done.")
     print('\n')
 
+def ejecta_profiles2(sim, d1class, criteria, fig_dir ='res_1d/', figname = 'ejecta_profile.png'):
+
+    assert len(criteria) > 0
+
+    # d1class.list_criteria = criteria
+
+    # simdir = Paths.gw170817 + sim + '/'
+    resdir = Paths.ppr_sims + sim + '/'
+
+    Printcolor.blue("\tInitializing ejecta profile plotting.")
+
+    if not os.path.isdir(resdir):
+        raise IOError("No simulation results frolder found: {}".format(resdir))
+    if not os.path.isdir(resdir + fig_dir):
+        Printcolor.yellow("\tCreating {} ".format(fig_dir))
+        os.mkdir(resdir+fig_dir)
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = resdir + fig_dir
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["dpi"] = 128
+    o_plot.gen_set["figsize"] = (4.2, 3.5)  # <->, |]
+    o_plot.gen_set["figname"] = figname
+    o_plot.gen_set["sharex"] = False
+    o_plot.gen_set["sharey"] = False
+    o_plot.gen_set["subplots_adjust_h"] = 0.3
+    o_plot.gen_set["subplots_adjust_w"] = 0.0
+    o_plot.set_plot_dics = []
+
+    # label1 = "Dyn"
+    # label2 = "Wind"
+
+    for criterion in criteria:
+        if criterion in crit_lbl.keys(): lbl = crit_lbl[criterion]
+        else: lbl = criterion
+        if criterion in crit_lbl.keys(): ls = crit_ls[criterion]
+        else: ls = "--"
+        if criterion in crit_lbl.keys(): color = crit_color[criterion]
+        else: color = 'black'
+        dic_ej_prof = {
+            'task': 'ejprof', 'ptype': 'cartesian',
+            'position': (1, 1),
+            'data': d1class, 'criterion': criterion,
+            'v_n_x': 't_tot_flux', 'v_n_y': 'mass_tot_flux',
+            'color': color, 'ls': ls, 'lw': 1., 'ds': 'default', 'alpha': 1.,
+            'xmin': None, 'xmax': None, 'ymin': 0, 'ymax': 1.4,
+            'xlabel': r"$t-t_{merg}$ [ms]", 'ylabel': r'$M_{ej}$ $[10^{-2}M_{\odot}]$',
+            'xunits': 'ms', '-t': d1class.get_par("tmerger_gw"), 'yunits': '1e-2Msun',
+            'xscale': "linear", 'yscale': "linear",
+            'label': lbl, 'title': {},
+            'fancyticks': True, 'minorticks': True,
+            'fontsize': 16,
+            'labelsize': 16,
+            'legend': {'loc': 'upper left', 'ncol': 1, 'fontsize': 14}  # 'loc': 'best',
+        }
+        o_plot.set_plot_dics.append(dic_ej_prof)
+
+    Printcolor.blue("\tPlotting ejecta profile")
+    o_plot.main()
+    Printcolor.blue("\tPlotting ejecta profile is done.")
+    print('\n')
+
+    # """ -------------- DD2 LK ---------------------"""
+    #
+    # Printcolor.blue("\tSetting ejecta profile plot parameters")
+    # # geo
+    # dic_ej_prof = {
+    #     'task': 'ejprof', 'ptype': 'cartesian',
+    #     'position': (1, 1),
+    #     'data': d1class, 'criterion': '_0',
+    #     'v_n_x': 't_tot_flux', 'v_n_y': 'mass_tot_flux',
+    #     'color': 'red', 'ls': '--', 'lw': 1., 'ds': 'default','alpha':1.,
+    #     'xmin':None, 'xmax':None, 'ymin': 0, 'ymax': 1.4,
+    #     'xlabel': r"$t-t_{merg}$ [ms]", 'ylabel': r'$M_{ej}$ $[10^{-2}M_{\odot}]$',
+    #     'xunits': 'ms', '-t': d1class.get_par("tmerger_gw"), 'yunits': '1e-2Msun',
+    #     'xscale':None, 'yscale': None,
+    #     'label': "Dyn.", 'title': {},
+    #     'fancyticks': True, 'minorticks': True,
+    #     'fontsize': 16,
+    #     'labelsize': 16,
+    #     'legend': {'loc': 'upper left', 'ncol': 1, 'fontsize': 14} # 'loc': 'best',
+    # }
+    # o_plot.set_plot_dics.append(dic_ej_prof)
+    # # bern
+    # if plot_bern:
+    #     dic_ej_prof = {
+    #         'task': 'ejprof', 'ptype': 'cartesian',
+    #         'position': (1, 1),
+    #         'data': d1class, 'criterion': '_0_b_w',
+    #         'v_n_x': 't_tot_flux', 'v_n_y': 'mass_tot_flux',
+    #         'color': 'blue', 'ls': '-', 'lw': 1., 'ds': 'default','alpha':1.,
+    #         'xmin':None, 'xmax':None, 'ymin': 0, 'ymax': 1.4,
+    #         'xlabel': r"$t-t_{merg}$ [ms]", 'ylabel': r'$M_{ej}$ $[10^{-2}M_{\odot}]$',
+    #         'xunits': 'ms', '-t': d1class.get_par("tmerger_gw"), 'yunits': '1e-2Msun',
+    #         'label': "Wind ", 'yscale': None, 'title': {},
+    #         'fancyticks': True, 'minorticks': True,
+    #         'fontsize': 16,
+    #         'labelsize': 16,
+    #         'legend': {'loc': 'upper left', 'ncol': 1, 'fontsize': 14} # 'loc': 'best',
+    #     }
+    #     o_plot.set_plot_dics.append(dic_ej_prof)
+    # Printcolor.blue("\tPlotting ejecta profile")
+    # o_plot.main()
+    # Printcolor.blue("\tPlotting ejecta profile is done.")
+    # print('\n')
+
 def ejecta_properties(sim, d1class, plot_bern = True, fig_dir ='res_1d/', figname = 'histograms.png'):
     simdir = Paths.gw170817 + sim + '/'
     resdir = Paths.ppr_sims + sim + '/'
@@ -1083,6 +1311,7 @@ def ejecta_properties(sim, d1class, plot_bern = True, fig_dir ='res_1d/', fignam
     o_plot.gen_set["figdir"] = resdir + fig_dir
     o_plot.gen_set["type"] = "cartesian"
     o_plot.gen_set["figsize"] = (9.0, 3.)  # <->, |]
+    o_plot.gen_set["dpi"] = 128
     o_plot.gen_set["figname"] = figname
     o_plot.gen_set["sharex"] = False
     o_plot.gen_set["sharey"] = False
@@ -1201,6 +1430,106 @@ def ejecta_properties(sim, d1class, plot_bern = True, fig_dir ='res_1d/', fignam
     Printcolor.blue("\tPlotting ejecta histograms is done.")
     # exit(1)
 
+def ejecta_properties2(sim, d1class, criteria, fig_dir ='res_1d/', figname = 'histograms.png'):
+
+    assert len(criteria) > 0
+
+    simdir = Paths.gw170817 + sim + '/'
+    resdir = Paths.ppr_sims + sim + '/'
+
+    Printcolor.blue("\tInitializing ejecta profile plotting.")
+
+    if not os.path.isdir(resdir):
+        raise IOError("No simulation results frolder found: {}".format(resdir))
+    if not os.path.isdir(resdir + fig_dir):
+        Printcolor.yellow("\tCreating {} ".format(fig_dir))
+        os.mkdir(resdir+fig_dir)
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = resdir + fig_dir
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["figsize"] = (9.0, 3.)  # <->, |]
+    o_plot.gen_set["dpi"] = 128
+    o_plot.gen_set["figname"] = figname
+    o_plot.gen_set["sharex"] = False
+    o_plot.gen_set["sharey"] = False
+    o_plot.gen_set["subplots_adjust_h"] = 0.3
+    o_plot.gen_set["subplots_adjust_w"] = 0.0
+    o_plot.set_plot_dics = []
+
+    ylabel = r'$M_{ej}$ [normed to 1]'
+    label1 =  "Dyn."
+    label2 =  "Wind"
+    fontsize = 16
+    labelsize = 16
+    ''' --- --- sim 1 --- --- --- '''
+
+    for criterion in criteria:
+        if criterion in crit_lbl.keys(): lbl = crit_lbl[criterion]
+        else: lbl = criterion
+        if criterion in crit_lbl.keys(): ls = crit_ls[criterion]
+        else: ls = "--"
+        if criterion in crit_lbl.keys(): color = crit_color[criterion]
+        else: color = 'black'
+
+        Printcolor.blue("\tSetting histograms profile plot parameters")
+        dic_hist_theta = {
+            'task': 'hist1d', 'ptype': 'cartesian',
+            'position': (1, 1),
+            'data': d1class, 'norm': True, 'criterion': criterion,
+            'v_n_x': 'hist_theta', 'v_n_y': 'hist_theta_m',
+            'color': color, 'ls': ls, 'lw': 0.6, 'ds': 'steps', 'alpha':0.6,
+            'ymin': 1e-4, 'ymax': 1e0,
+            'xlabel': r"Angle from orbital plane", 'ylabel': ylabel,
+            'label': None, 'yscale': 'log',
+            'fancyticks': True, 'minorticks': True,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+            # 'legend': {'loc': 'best', 'ncol': 2, 'fontsize': 18}
+        }
+        o_plot.set_plot_dics.append(dic_hist_theta)
+
+        dic_hist_vel_inf = {
+            'task': 'hist1d', 'ptype': 'cartesian',
+            'position': (1, 2),
+            'data': d1class, 'norm': True, 'criterion': criterion,
+            'v_n_x': 'hist_vel_inf', 'v_n_y': 'hist_vel_inf_m',
+            'color': color, 'ls': ls, 'lw': 0.6, 'ds': 'steps', 'alpha':0.8,
+            'xmin': 0., 'xmax': 1., 'ymin': 1e-4, 'ymax': 1e0,
+            'xlabel': r"$\upsilon_{\infty}$ [c]", 'ylabel': ylabel,
+            'label': lbl, 'yscale': 'log',
+            'fancyticks': True, 'minorticks': True,
+            'sharey': True,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+            'legend': {'loc': 'best', 'ncol': 1, 'fontsize': 14}
+        }
+        o_plot.set_plot_dics.append(dic_hist_vel_inf)
+
+        dic_hist_ye = {
+            'task': 'hist1d', 'ptype': 'cartesian',
+            'position': (1, 3),
+            'data': d1class, 'norm': True, 'criterion': criterion,
+            'v_n_x': 'hist_ye', 'v_n_y': 'hist_ye_m',
+            'color': color, 'ls': ls, 'lw': 0.6, 'ds': 'steps', 'alpha':0.8,
+            'xmin': 0., 'xmax': 0.5, 'ymin': 1e-4, 'ymax': 1e0,
+            'xlabel': r"$Y_e$", 'ylabel': ylabel,
+            'label': None, 'yscale': 'log',
+            'fancyticks': True, 'minorticks': True,
+            'sharey': True,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+            # 'legend': {'loc': 'best', 'ncol': 2, 'fontsize': 18}
+        }
+        o_plot.set_plot_dics.append(dic_hist_ye)
+
+
+
+    Printcolor.blue("\tPlotting ejecta histograms")
+    o_plot.main()
+    Printcolor.blue("\tPlotting ejecta histograms is done.")
+    # exit(1)
+
 def ejecta_correlations_vinf(sim, d1class, plot_bern = True, fig_dir ='res_1d/', figname = 'correlations_vinf.png'):
     simdir = Paths.gw170817 + sim + '/'
     resdir = Paths.ppr_sims + sim + '/'
@@ -1217,6 +1546,7 @@ def ejecta_correlations_vinf(sim, d1class, plot_bern = True, fig_dir ='res_1d/',
     o_plot.gen_set["figdir"] = resdir + fig_dir
     o_plot.gen_set["type"] = "cartesian"
     o_plot.gen_set["figsize"] = (9.0, 3.)  # <->, |]
+    o_plot.gen_set["dpi"] = 128
     o_plot.gen_set["figname"] = figname
     o_plot.gen_set["sharex"] = False
     o_plot.gen_set["sharey"] = False
@@ -1289,6 +1619,94 @@ def ejecta_correlations_vinf(sim, d1class, plot_bern = True, fig_dir ='res_1d/',
     Printcolor.blue("\tPlotting ejecta correlations is done.")
     print('\n')
 
+def ejecta_correlations_vinf2(sim, d1class, criteria, fig_dir ='res_1d/', figname = 'correlations_vinf.png'):
+
+    assert len(criteria) > 0
+
+    simdir = Paths.gw170817 + sim + '/'
+    resdir = Paths.ppr_sims + sim + '/'
+
+    Printcolor.blue("\tInitializing ejecta profile plotting.")
+
+    if not os.path.isdir(resdir):
+        raise IOError("No simulation results frolder found: {}".format(resdir))
+    if not os.path.isdir(resdir + fig_dir):
+        Printcolor.yellow("\tCreating {} ".format(fig_dir))
+        os.mkdir(resdir + fig_dir)
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = resdir + fig_dir
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["figsize"] = (3.*len(criteria), 3.)  # <->, |]
+    o_plot.gen_set["dpi"] = 128
+    o_plot.gen_set["figname"] = figname
+    o_plot.gen_set["sharex"] = False
+    o_plot.gen_set["sharey"] = False
+    o_plot.gen_set["subplots_adjust_h"] = 0.3
+    o_plot.gen_set["subplots_adjust_w"] = 0.0
+    o_plot.set_plot_dics = []
+
+    fontsize = 16
+    labelsize = 16
+
+    Printcolor.blue("\tPlotting ejecta correlations")
+    for i, criterion in enumerate(criteria):
+
+        if criterion in crit_lbl.keys(): lbl = crit_lbl[criterion]
+        else: lbl = criterion
+        if criterion in crit_lbl.keys(): ls = crit_ls[criterion]
+        else: ls = "--"
+        if criterion in crit_lbl.keys(): color = crit_color[criterion]
+        else: color = 'black'
+
+        print(criterion)
+
+        if criterion.__contains__("_b"):
+            v_n_x = "vel_inf_bern"
+        else:
+            v_n_x = "vel_inf"
+
+        Printcolor.blue("\tSetting correlations profile plot parameters")
+        corr_vinf_theta = {  # relies on the "get_res_corr(self, it, v_n): " method of data object
+            'task': 'outflow corr', 'dtype': 'corr', 'ptype': 'cartesian',
+            'data': d1class, 'criterion': str(criterion),
+            'position': (1, i+1),
+            'cbar': {},
+            'v_n_x': v_n_x, 'v_n_y': 'theta',  'v_n': r'$M_{ej}$ [normed to 1]',
+            'xlabel': r'$\upsilon_{\infty}$ [c]', 'ylabel': r"Angle from orbital plane",
+            'xmin': 0.0, 'xmax': 0.7, 'ymin': 0, 'ymax': 90, 'vmin': 1e-4, 'vmax': 1e-1,
+            'xscale': None, 'yscale': None, 'normalize': True,
+            'mask_below': 1e-4, 'mask_above': None, 'cmap': 'Reds', 'norm': 'log', 'todo': None,
+            'fancyticks': True, 'minorticks': True,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+            'title': {},
+            'legend': {},
+            'text':{'coords':(0.8, 0.8), 'text':lbl, 'color':'black', 'fs':16},
+            'sharey': False
+        }
+        if i > 0:
+            corr_vinf_theta['sharey'] = True
+        if criterion == criteria[-1]:
+            corr_vinf_theta['cbar'] = {'location': 'right .03 .0', 'label': r'$M_{ej}$ [normed to 1]',
+                                       'labelsize': 16, 'fontsize': 16}
+
+        o_plot.set_plot_dics.append(corr_vinf_theta)
+
+
+        coll_time_vert = {
+            'task': 'vertline', 'dtype': '-', 'ptype': 'cartesian',
+            'value': 0.25,
+            'position': (1, i+1),
+            'ls': '-.', 'color': 'black', 'lw': 0.8,
+        }
+        o_plot.set_plot_dics.append(coll_time_vert)
+
+    # exit(1)
+    o_plot.main()
+    Printcolor.blue("\tPlotting ejecta correlations is done.")
+    print('\n')
+
 def ejecta_correlations_ye(sim, d1class, plot_bern = True, fig_dir ='res_1d/', figname = 'correlations_ye.png'):
     simdir = Paths.gw170817 + sim + '/'
     resdir = Paths.ppr_sims + sim + '/'
@@ -1305,6 +1723,7 @@ def ejecta_correlations_ye(sim, d1class, plot_bern = True, fig_dir ='res_1d/', f
     o_plot.gen_set["figdir"] = resdir + fig_dir
     o_plot.gen_set["type"] = "cartesian"
     o_plot.gen_set["figsize"] = (9.0, 3.)  # <->, |]
+    o_plot.gen_set["dpi"] = 128
     o_plot.gen_set["figname"] = figname
     o_plot.gen_set["sharex"] = False
     o_plot.gen_set["sharey"] = False
@@ -1382,6 +1801,86 @@ def ejecta_correlations_ye(sim, d1class, plot_bern = True, fig_dir ='res_1d/', f
     Printcolor.blue("\tPlotting ejecta correlations is done.")
     print('\n')
 
+def ejecta_correlations_ye2(sim, d1class, criteria, fig_dir ='res_1d/', figname = 'correlations_ye.png'):
+
+    assert len(criteria) > 0
+
+    simdir = Paths.gw170817 + sim + '/'
+    resdir = Paths.ppr_sims + sim + '/'
+
+    Printcolor.blue("\tInitializing ejecta profile plotting.")
+
+    if not os.path.isdir(resdir):
+        raise IOError("No simulation results frolder found: {}".format(resdir))
+    if not os.path.isdir(resdir + fig_dir):
+        Printcolor.yellow("\tCreating {} ".format(fig_dir))
+        os.mkdir(resdir + fig_dir)
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = resdir + fig_dir
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["figsize"] = (3.*len(criteria), 3.)  # <->, |]
+    o_plot.gen_set["dpi"] = 128
+    o_plot.gen_set["figname"] = figname
+    o_plot.gen_set["sharex"] = False
+    o_plot.gen_set["sharey"] = False
+    o_plot.gen_set["subplots_adjust_h"] = 0.3
+    o_plot.gen_set["subplots_adjust_w"] = 0.0
+    o_plot.set_plot_dics = []
+
+    v_n = r'$M_{ej}$ [normed to 1]'
+
+    fontsize = 16
+    labelsize = 16
+
+    Printcolor.blue("\tPlotting ejecta correlations")
+    for i, criterion in enumerate(criteria):
+
+        if criterion in crit_lbl.keys(): lbl = crit_lbl[criterion]
+        else: lbl = criterion
+        if criterion in crit_lbl.keys(): ls = crit_ls[criterion]
+        else: ls = "--"
+        if criterion in crit_lbl.keys(): color = crit_color[criterion]
+        else: color = 'black'
+
+        Printcolor.blue("\tSetting correlations profile plot parameters")
+        corr_vinf_theta = {  # relies on the "get_res_corr(self, it, v_n): " method of data object
+            'task': 'outflow corr', 'dtype': 'corr', 'ptype': 'cartesian',
+            'data': d1class, 'criterion': criterion,
+            'position': (1, i+1),
+            'cbar': {}, # 'fmt': '%.1f',
+            'v_n_x': 'ye', 'v_n_y': 'theta', 'v_n': 'mass',
+            'xlabel': r'$Y_e$', 'ylabel': r"Angle from orbital plane",
+            'xmin': 0.0, 'xmax': 0.49, 'ymin': 0, 'ymax': 90, 'vmin': 1e-4, 'vmax': 1e-1,
+            'xscale': None, 'yscale': None, 'normalize': True,
+            'mask_below': 1e-4, 'mask_above': None, 'cmap': 'Reds', 'norm': 'log', 'todo': None,
+            'fancyticks': True, 'minorticks': True,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+            'legend': {},  # {'loc': 'best', 'ncol': 2, 'fontsize': 18}
+            'text':{'coords':(0.8, 0.8), 'text':lbl, 'color':'black', 'fs':16},
+            'sharey': False
+        }
+        if i > 0:
+            corr_vinf_theta['sharey'] = True
+        if criterion == criteria[-1]:
+            corr_vinf_theta['cbar'] = {'location': 'right .03 .0', 'label': v_n,
+                         'labelsize': 16, 'fontsize': 16}
+        o_plot.set_plot_dics.append(corr_vinf_theta)
+
+
+        coll_time_vert = {
+            'task': 'vertline', 'dtype': '-', 'ptype': 'cartesian',
+            'value': 0.25,
+            'position': (1, i+1),
+            'ls': '-.', 'color': 'black', 'lw': 0.8,
+        }
+        o_plot.set_plot_dics.append(coll_time_vert)
+
+    o_plot.main()
+    Printcolor.blue("\tPlotting ejecta correlations is done.")
+    print('\n')
+
 def plot_nucleo_yields(sim, nuc_class, plot_bern = True, fig_dir ='res_1d/', figname = 'yields.png'):
 
     simdir = Paths.gw170817 + sim + '/'
@@ -1399,6 +1898,7 @@ def plot_nucleo_yields(sim, nuc_class, plot_bern = True, fig_dir ='res_1d/', fig
     o_plot.gen_set["figdir"] = resdir + fig_dir
     o_plot.gen_set["type"] = "cartesian"
     o_plot.gen_set["figsize"] = (6.0, 3.)  # <->, |]
+    o_plot.gen_set["dpi"] = 128
     o_plot.gen_set["figname"] = figname
     o_plot.gen_set["sharex"] = False
     o_plot.gen_set["sharey"] = False
@@ -1444,6 +1944,119 @@ def plot_nucleo_yields(sim, nuc_class, plot_bern = True, fig_dir ='res_1d/', fig
         'legend':  {}# {'loc': 'best', 'ncol': 2, 'fontsize': 18},
     }
     if plot_bern: o_plot.set_plot_dics.append(sim_nucleo_b)
+
+    sol_yeilds = {
+        'task': 'nucleo', 'ptype': 'cartesian',
+        'position': (1, 1),
+        'data': nuc_class, 'criterion': '_0', 'method': 'sum',
+        'v_n_x': 'Asun', 'v_n_y': 'Ysun',
+        'color': 'gray', 'marker': 'o', 'ms': 4, 'alpha':0.4,
+        'ymin': 8e-5, 'ymax': 8e-1, 'xmin': 50, 'xmax': 210,
+        'xlabel': r"A", 'ylabel': r'Relative final abundances',
+        'label': 'solar', 'yscale': 'log',
+        'fancyticks': True, 'minorticks': True,
+        'fontsize': fontsize,
+        'labelsize': labelsize,
+        'legend': {'loc': 'best', 'ncol': 1, 'fontsize': 14},
+
+    }
+    o_plot.set_plot_dics.append(sol_yeilds)
+    Printcolor.blue("\tPlotting ejecta nucleo yields")
+    o_plot.main()
+    Printcolor.blue("\tPlotting ejecta nucleo yeilds is done.")
+    print('\n')
+
+def plot_nucleo_yields2(sim, nuc_class, criteria, fig_dir ='res_1d/', figname = 'yields.png'):
+
+    assert len(criteria) > 0
+
+    simdir = Paths.gw170817 + sim + '/'
+    resdir = Paths.ppr_sims + sim + '/'
+
+    Printcolor.blue("\tInitializing ejecta profile plotting.")
+
+    if not os.path.isdir(resdir):
+        raise IOError("No simulation results frolder found: {}".format(resdir))
+    if not os.path.isdir(resdir + fig_dir):
+        Printcolor.yellow("\tCreating {} ".format(fig_dir))
+        os.mkdir(resdir + fig_dir)
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = resdir + fig_dir
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["figsize"] = (6.0, 3.)  # <->, |]
+    o_plot.gen_set["dpi"] = 128
+    o_plot.gen_set["figname"] = figname
+    o_plot.gen_set["sharex"] = False
+    o_plot.gen_set["sharey"] = False
+    o_plot.gen_set["subplots_adjust_h"] = 0.3
+    o_plot.gen_set["subplots_adjust_w"] = 0.0
+    o_plot.set_plot_dics = []
+
+    fontsize = 16
+    labelsize = 16
+
+    _criterion = str()
+    for criterion in criteria:
+        if criterion == criteria[0]: _criterion = criterion
+        else: _criterion = _criterion + ' ' + criterion
+        # print(_criterion)
+
+        if criterion in crit_lbl.keys(): lbl = crit_lbl[_criterion]
+        else: lbl = criterion
+        if criterion in crit_lbl.keys(): ls = crit_ls[criterion]
+        else: ls = "--"
+        if criterion in crit_lbl.keys(): color = crit_color[criterion]
+        else: color = 'black'
+
+        sim_nucleo = {
+            'task': 'nucleo', 'ptype': 'cartesian',
+            'position': (1, 1),
+            'data': nuc_class, 'criterion': _criterion, 'method': 'Asol=195',
+            'v_n_x': 'A', 'v_n_y': 'Y_final',
+            'color': color, 'ls': ls, 'lw': 0.6, 'ds': 'steps', 'alpha': 0.6,
+            'ymin': 1e-5, 'ymax': 2e-1, 'xmin': 50, 'xmax': 210,
+            'xlabel': r"A", 'ylabel': r'Relative final abundances',
+            'label': lbl, 'yscale': 'log',
+            'fancyticks': True, 'minorticks': True,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+        }
+        o_plot.set_plot_dics.append(sim_nucleo)
+    #
+    #
+    # color='red'
+    #
+    # sim_nucleo = {
+    #     'task': 'nucleo', 'ptype': 'cartesian',
+    #     'position': (1, 1),
+    #     'data': nuc_class, 'criterion': '_0', 'method': 'Asol=195',
+    #     'v_n_x': 'A', 'v_n_y': 'Y_final',
+    #     'color': color, 'ls': ':', 'lw': 0.6, 'ds': 'steps', 'alpha': 0.6,
+    #     'ymin': 1e-5, 'ymax': 2e-1, 'xmin': 50, 'xmax': 210,
+    #     'xlabel': r"A", 'ylabel': r'Relative final abundances',
+    #     'label': label1, 'yscale': 'log',
+    #     'fancyticks': True, 'minorticks': True,
+    #     'fontsize': fontsize,
+    #     'labelsize': labelsize,
+    # }
+    # o_plot.set_plot_dics.append(sim_nucleo)
+    #
+    # sim_nucleo_b = {
+    #     'task': 'nucleo', 'ptype': 'cartesian',
+    #     'position': (1, 1),
+    #     'data': nuc_class, 'criterion': '_0 _0_b_w', 'method': 'Asol=195',
+    #     'v_n_x': 'A', 'v_n_y': 'Y_final',
+    #     'color': color, 'ls': '-', 'lw': 1.0, 'ds': 'steps', 'alpha': 1.0,
+    #     'ymin': 1e-5, 'ymax': 2e-1, 'xmin': 50, 'xmax': 210,
+    #     'xlabel': r"A", 'ylabel': r'Relative final abundances',
+    #     'label': label2, 'yscale': 'log',
+    #     'fancyticks': True, 'minorticks': True,
+    #     'fontsize': fontsize,
+    #     'labelsize': labelsize,
+    #     'legend':  {}# {'loc': 'best', 'ncol': 2, 'fontsize': 18},
+    # }
+    # if plot_bern: o_plot.set_plot_dics.append(sim_nucleo_b)
 
     sol_yeilds = {
         'task': 'nucleo', 'ptype': 'cartesian',
@@ -1899,7 +2512,7 @@ def do_save_xy_xz_slices(d3class, plane, v_ns, save=True, overwrite=False):
 
 def plot_slice_from_3D(d1class, d3class, rl, v_n, figdir='slices/', rewritefigs=False):
 
-    def_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian',
+    def_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
                   'data': None, 'it': 00000, 'plane': 'xz', 'rl': rl,
                   'position': (1, 1),  # 'title': '[{:.1f} ms]'.format(time_),
                   'cbar': {'location': 'right .03 .0', 'label': r'$\rho$ [geo]',  # 'fmt': '%.1e',
@@ -1916,7 +2529,7 @@ def plot_slice_from_3D(d1class, d3class, rl, v_n, figdir='slices/', rewritefigs=
                   'fontsize': 14,
                   'labelsize': 14
                   }
-    def_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian',
+    def_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
                   'data': None, 'it': 00000, 'plane': 'xy', 'rl': rl,
                   'position': (2, 1),  # 'title': '[{:.1f} ms]'.format(time_),
                   'cbar': {},
@@ -2293,6 +2906,8 @@ def do_histogram_processing_of_iterations(d3corrclass, corr_task, tmin=None, tma
         corr_task_dic = d3corrclass.corr_task_dic_rho_ye
     elif corr_task == "temp_Ye":
         corr_task_dic = d3corrclass.corr_task_dic_temp_ye
+    elif corr_task == "velz_Ye":
+        corr_task_dic = d3corrclass.corr_task_dic_velz_ye
     elif corr_task == "rho_theta":
         corr_task_dic = d3corrclass.corr_task_dic_rho_theta
     elif corr_task == "velz_theta":
@@ -2301,8 +2916,14 @@ def do_histogram_processing_of_iterations(d3corrclass, corr_task, tmin=None, tma
         corr_task_dic = d3corrclass.corr_task_dic_rho_ang_mom
     elif corr_task == "rho_ang_mom_flux":
         corr_task_dic = d3corrclass.corr_task_dic_rho_ang_mom_flux
+    elif corr_task == "Ye_dens_unb_bern":
+        corr_task_dic = d3corrclass.corr_task_dic_ye_dens_unb_bern
     elif corr_task == "rho_dens_unb_bern":
         corr_task_dic = d3corrclass.corr_task_dic_rho_dens_unb_bern
+    elif corr_task == "velz_dens_unb_bern":
+        corr_task_dic = d3corrclass.corr_task_dic_velz_dens_unb_bern
+    elif corr_task == "theta_dens_unb_bern":
+        corr_task_dic = d3corrclass.corr_task_dic_theta_dens_unb_bern
     elif corr_task == "ang_mom_flux_theta":
         corr_task_dic = d3corrclass.corr_task_dic_ang_mom_flux_theta
     elif corr_task == "ang_mom_flux_dens_unb_bern":
@@ -2560,12 +3181,12 @@ def do_compute_density_modes(d3class, rl, mmax, tmin=None, tmax=None, save=True,
 
     if isprofs:
         if os.path.isfile(Paths.ppr_sims+d3class.sim+"/res_3d/"+fname) and not overwrite:
-            Printcolor.blue("Skipping:", True)
+            Printcolor.blue("\tSkipping:", True)
             Printcolor.green("{}".format("density modes"), True)
             Printcolor.blue("rl:", True)
             Printcolor.green("{}".format(rl), False)
         else:
-            Printcolor.blue("Computing:", True)
+            Printcolor.blue("\tComputing:", True)
             Printcolor.green("{}".format("density modes"), True)
             Printcolor.blue("rl:", True)
             Printcolor.green("{}".format(rl), False)
@@ -2651,6 +3272,8 @@ if __name__ == '__main__':
     parser.add_argument("-o", dest="overwrite", required=False, default=[], help="overwrite if exists")
     parser.add_argument("-p", dest="plot", required=False, default='no', help="task to perform")
     parser.add_argument("-i", dest="simdir", required=False, default=Paths.gw170817, help="path to sim dir")
+    parser.add_argument("--sym", dest="symmetry", required=False, default=None, help="symmetry (like 'pi')")
+    parser.add_argument("--crits", dest="criteria", nargs='+', required=False, default=[], help="criteria to use (like _0 ...)")
     # parser.add_argument("-i", dest="filenames",
     #                     nargs='+', required=True,
     #                     help="inputfiles", metavar="FILE")
@@ -2670,12 +3293,15 @@ if __name__ == '__main__':
     plot = args.plot
     sim = args.sim
     v_n = args.v_n
+    symmetry = args.symmetry
     overwrite = args.overwrite
+    criteria = args.criteria
     Paths.gw170817 = args.simdir # '/data1/numrel/WhiskyTHC/Backup/2018/SLy4_M130130_SR_physics/'
     simdir = Paths.gw170817 + sim + '/'
     resdir = Paths.ppr_sims + sim + '/'
     rl = int(args.rl)
     it = int(args.it)
+
     times = np.array(args.times, dtype=np.float32)
     # assert that given input is correct
     assert os.path.isdir(args.simdir)
@@ -2720,8 +3346,15 @@ if __name__ == '__main__':
         get_bern_time(sim, fraction = 0.98, berntimefile = "berntime.txt", plot = "berntime.png")
         os.system("cp {} {}".format(Paths.gw170817+sim+'/'+"berntime.*", Paths.ppr_sims+sim+'/'))
 
-    if task == "analyze.sh":
-        os.system(scrdic + 'analyze.sh' + ' ' + simdir)
+    if task in ["analyze.sh", "outflowed_0", "outflowed_0_b_w", "outflowed_0_b_w_pc", "collated", "waveforms"]:
+        if task == "analyze.sh": os.system(scrdic + 'analyze.sh' + ' ' + simdir)
+        elif task == "outflowed_0": os.system(scrdic + 'ejecta/analyze.sh' + ' ' + simdir)
+        elif task == "outflowed_0_b_w": os.system(scrdic + 'ejecta/analyze_b_dw.sh' + ' ' + simdir)
+        elif task == "outflowed_0_b_w_pc": os.system(scrdic + 'ejecta/analyze_b_w_pc.sh' + ' ' + simdir)
+        elif task == "collated": os.system(scrdic + 'msc/collateall.sh' + ' ' + simdir)
+        elif task == "waveforms":  os.system(scrdic + 'gw/analyze.sh' + ' ' + simdir)
+        else:
+            raise NameError("task: {} is not recognized".format(task))
         if not os.path.isdir(resdir):
             os.mkdir(resdir)
         for item in reslist:
@@ -2737,16 +3370,25 @@ if __name__ == '__main__':
     if task == "d1plots":
         # perform the plotting of the outflowed.cpp
         d1class = ADD_METHODS_1D(sim)
-        ejecta_profiles(sim, d1class, plot_bern=False, fig_dir='res_1d/', figname='ejecta_profile_dyn.png')
-        ejecta_profiles(sim, d1class, plot_bern=True, fig_dir='res_1d/', figname='ejecta_profile_dyn_bern.png')
-        ejecta_properties(sim, d1class, plot_bern=True, fig_dir='res_1d/', figname='histograms.png')
-        ejecta_correlations_vinf(sim, d1class, plot_bern=True, fig_dir='res_1d/', figname='correlations_vinf.png')
-        ejecta_correlations_ye(sim, d1class, plot_bern=True, fig_dir='res_1d/', figname='correlations_ye.png')
         nucclass = NORMALIZE_NUCLEO(sim)
-        plot_nucleo_yields(sim, nucclass, plot_bern=True, fig_dir='res_1d/', figname='yields.png')
+        if len(criteria) > 0:
+            Printcolor.blue("\tCriteria are given manually: {}. Executing d1plots...".format(criteria))
+            ejecta_profiles2(sim, d1class, criteria, fig_dir='res_1d/', figname='ejecta_profile_dyn.png')
+            ejecta_properties2(sim, d1class, criteria, fig_dir='res_1d/', figname='histograms.png')
+            ejecta_correlations_vinf2(sim, d1class, criteria, fig_dir='res_1d/', figname='correlations_vinf.png')
+            ejecta_correlations_ye2(sim, d1class, criteria, fig_dir='res_1d/', figname='correlations_ye.png')
+            plot_nucleo_yields2(sim, nucclass, criteria, fig_dir='res_1d/', figname='yields.png')
+        else:
+            Printcolor.blue("\tCriteria are not given manually. Executing d1plots...")
+            ejecta_profiles(sim, d1class, plot_bern=False, fig_dir='res_1d/', figname='ejecta_profile_dyn.png')
+            ejecta_profiles(sim, d1class, plot_bern=True, fig_dir='res_1d/', figname='ejecta_profile_dyn_bern.png')
+            ejecta_properties(sim, d1class, plot_bern=True, fig_dir='res_1d/', figname='histograms.png')
+            ejecta_correlations_vinf(sim, d1class, plot_bern=True, fig_dir='res_1d/', figname='correlations_vinf.png')
+            ejecta_correlations_ye(sim, d1class, plot_bern=True, fig_dir='res_1d/', figname='correlations_ye.png')
+            plot_nucleo_yields(sim, nucclass, plot_bern=True, fig_dir='res_1d/', figname='yields.png')
 
     if task == "d3corr":
-        d3class = MAINMETHODS_STORE(sim)
+        d3class = MAINMETHODS_STORE(sim, symmetry=symmetry)
         assert v_n != "no"
         assert v_n in __d3corrs__
         do_histogram_processing_of_iterations(d3class, corr_task=v_n,
@@ -2754,12 +3396,12 @@ if __name__ == '__main__':
                                               save=True, overwrite=True)
 
     if task == "d3corrs":
-        d3class = MAINMETHODS_STORE(sim)
+        d3class = MAINMETHODS_STORE(sim, symmetry=symmetry)
         do_histogram_processing_of_iterations(d3class, corr_task=task,
                                               tmin=None, tmax=None, save=True, overwrite=overwrite)
 
     if task == "d3all":
-        d3class = MAINMETHODS_STORE(sim)
+        d3class = MAINMETHODS_STORE(sim, symmetry=symmetry)
 
         for plane in __d3slicesplanes__:
             do_save_xy_xz_slices(d3class, plane=plane, v_ns=__d3slicesvns__, save=True, overwrite=overwrite)

@@ -50,6 +50,7 @@ from plotting_nexus import PLOT_MANY_TASKS
 from preanalysis import LOAD_INIT_DATA
 from d1analysis import ADD_METHODS_1D
 
+from d3analysis import LOAD_PROFILE_XYXZ, LOAD_RES_CORR
 """=============================================| LISTS of SIMS |===================================================="""
 
 list_sims_ls220 = [
@@ -384,7 +385,7 @@ def plot_ejecta_properites():
     o_plot = PLOT_MANY_TASKS()
     o_plot.gen_set["figdir"] = Paths.plots + "all/"
     o_plot.gen_set["type"] = "cartesian"
-    o_plot.gen_set["figsize"] = (4.2, 11.2)  # <->, |]
+    o_plot.gen_set["figsize"] = (4.2, 9.2)  # <->, |]
     o_plot.gen_set["figname"] = "dyn_ej_ave.png"
     o_plot.gen_set["sharex"] = True
     o_plot.gen_set["sharey"] = False
@@ -484,24 +485,24 @@ def plot_ejecta_properites():
         o_plot.set_plot_dics.append(dic_ye_prof)
 
         # =========================================== DiskMass3D
-        mdisk = d1class.get_par("Mdisk3D")
-        if not np.isnan(mdisk):
-            dic_ye_prof = {
-                'task': 'marker', 'ptype': 'cartesian',
-                'position': (4, 1),
-                'x': np.array(lam, dtype=float), 'y': np.array(mdisk, dtype=float),
-                'v_n_x': 'Lambda', 'v_n_y': None,
-                'color': eos_color(sim.split('_')[0]), 'marker': marker, 'ms': ms, 'alpha': 1.,
-                # 'xmin': 400, 'xmax': 850,
-                'ymin': 0., 'ymax': 0.32,
-                'xlabel': r"$\tilde{\Lambda}$", 'ylabel': r'$M_{\rm{disk}}$ $[M_{\odot}]$',
-                'label': lbl, 'yscale': None, 'title': {},
-                'fancyticks': True, 'minorticks': True,
-                'fontsize': fontsize,
-                'labelsize': labelsize,
-                # 'legend': {'loc': 'upper right', 'ncol': 2, 'fontsize': 12}
-            }
-            o_plot.set_plot_dics.append(dic_ye_prof)
+        # mdisk = d1class.get_par("Mdisk3D")
+        # if not np.isnan(mdisk):
+        #     dic_ye_prof = {
+        #         'task': 'marker', 'ptype': 'cartesian',
+        #         'position': (4, 1),
+        #         'x': np.array(lam, dtype=float), 'y': np.array(mdisk, dtype=float),
+        #         'v_n_x': 'Lambda', 'v_n_y': None,
+        #         'color': eos_color(sim.split('_')[0]), 'marker': marker, 'ms': ms, 'alpha': 1.,
+        #         # 'xmin': 400, 'xmax': 850,
+        #         'ymin': 0., 'ymax': 0.32,
+        #         'xlabel': r"$\tilde{\Lambda}$", 'ylabel': r'$M_{\rm{disk}}$ $[M_{\odot}]$',
+        #         'label': lbl, 'yscale': None, 'title': {},
+        #         'fancyticks': True, 'minorticks': True,
+        #         'fontsize': fontsize,
+        #         'labelsize': labelsize,
+        #         # 'legend': {'loc': 'upper right', 'ncol': 2, 'fontsize': 12}
+        #     }
+        #     o_plot.set_plot_dics.append(dic_ye_prof)
 
 
         # print('')
@@ -620,4 +621,1353 @@ def plot_disk_mass_evol():
 
     o_plot.main()
     exit(1)
-plot_disk_mass_evol()
+# plot_disk_mass_evol()
+
+def plot_ejecta_properites_bern():
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = Paths.plots + "all/"
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["figsize"] = (4.2, 9.2)  # <->, |]
+    o_plot.gen_set["figname"] = "bern_ej_ave.png"
+    o_plot.gen_set["sharex"] = True
+    o_plot.gen_set["sharey"] = False
+    o_plot.gen_set["subplots_adjust_h"] = 0.0
+    o_plot.gen_set["subplots_adjust_w"] = 0.0
+    o_plot.set_plot_dics = []
+
+    # label1 = "Dyn"
+    # label2 = "Wind"
+    label1v = "Dyn."
+    label2v = "Wind"
+    fontsize = 12
+    labelsize = 12
+
+    lams, mejs, eoss = [], [], []
+    for sim in list_sims_all:
+        print(sim),
+        self_prop = LOAD_INIT_DATA(sim)
+        lam = self_prop.get_par("Lambda")
+        lams.append(lam)
+        print("lam:{}".format(lam)),
+
+        d1class = ADD_METHODS_1D(sim)
+        mej = d1class.get_par("Mej_tot", criterion="_0_b_w")
+        mejs.append(mej)
+        print("mej:{}".format(mej)),
+
+        print('')
+
+        if sim.__contains__("LK"):
+            marker = "d"
+        else:
+            marker = "x"
+
+        if sim.split('_')[0] in eoss:
+            lbl = None
+        else:
+            eoss.append(sim.split('_')[0])
+            lbl = sim.split('_')[0]
+
+        ms = get_ms(float(self_prop.get_par("q")))
+
+        tcoll = d1class.get_par("tcoll_gw")
+        if not np.isnan(tcoll):
+            arrow = None
+        else:
+            arrow = "up"
+        print("arrow: {}".format(arrow))
+        # ================ Mej
+        dic_ej_prof = {
+            'task': 'marker', 'ptype': 'cartesian',
+            'position': (1, 1),
+            'x': np.array(lam, dtype=float), 'y': np.array(mej * 1e2, dtype=float),
+            'arrow': arrow,
+            'v_n_x': 'Lambda', 'v_n_y': None,
+            'color': eos_color(sim.split('_')[0]), 'marker': marker, 'ms': ms, 'alpha': 1.,
+            # 'xmin': 400, 'xmax': 850,
+            'ymin': 0.07, 'ymax': 2.9,
+            'xlabel': r"$\tilde{\Lambda}$", 'ylabel': r'$M_{\rm ej}$ $[10^{-2} M_{\odot}]$',
+            'label': lbl, 'yscale': None, 'title': {},
+            'fancyticks': True, 'minorticks': True,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+            'legend': {'loc': 'upper center', 'ncol': 2, 'fontsize': 12}
+        }
+        o_plot.set_plot_dics.append(dic_ej_prof)
+
+        # ================================================= Ye
+        ye = d1class.get_par("Ye_ave", criterion="_0_b_w")
+        dic_ye_prof = {
+            'task': 'marker', 'ptype': 'cartesian',
+            'position': (2, 1),
+            'x': np.array(lam, dtype=float), 'y': np.array(ye, dtype=float),
+            'v_n_x': 'Lambda', 'v_n_y': None,
+            'color': eos_color(sim.split('_')[0]), 'marker': marker, 'ms': ms, 'alpha': 1.,
+            # 'xmin': 400, 'xmax': 850,
+            'ymin': 0.10, 'ymax': 0.34,
+            'xlabel': r"$\tilde{\Lambda}$", 'ylabel': r'$Y_e$',
+            'label': lbl, 'yscale': None, 'title': {},
+            'fancyticks': True, 'minorticks': True,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+            # 'legend': {'loc': 'upper right', 'ncol': 2, 'fontsize': 12}
+        }
+        o_plot.set_plot_dics.append(dic_ye_prof)
+
+        # =========================================== vinf
+        vinf = d1class.get_par("vel_inf_ave", criterion="_0_b_w")
+        dic_ye_prof = {
+            'task': 'marker', 'ptype': 'cartesian',
+            'position': (3, 1),
+            'x': np.array(lam, dtype=float), 'y': np.array(vinf, dtype=float),
+            'v_n_x': 'Lambda', 'v_n_y': None,
+            'color': eos_color(sim.split('_')[0]), 'marker': marker, 'ms': ms, 'alpha': 1.,
+            # 'xmin': 400, 'xmax': 850,
+            'ymin': 0.10, 'ymax': 0.27,
+            'xlabel': r"$\tilde{\Lambda}$", 'ylabel': r'$\upsilon_{\infty}$ $[c]$',
+            'label': lbl, 'yscale': None, 'title': {},
+            'fancyticks': True, 'minorticks': True,
+            'fontsize': fontsize,
+            'labelsize': labelsize,
+            # 'legend': {'loc': 'upper right', 'ncol': 2, 'fontsize': 12}
+        }
+        o_plot.set_plot_dics.append(dic_ye_prof)
+
+        # =========================================== DiskMass3D
+        # mdisk = d1class.get_par("Mdisk3D")
+        # if not np.isnan(mdisk):
+        #     dic_ye_prof = {
+        #         'task': 'marker', 'ptype': 'cartesian',
+        #         'position': (4, 1),
+        #         'x': np.array(lam, dtype=float), 'y': np.array(mdisk, dtype=float),
+        #         'v_n_x': 'Lambda', 'v_n_y': None,
+        #         'color': eos_color(sim.split('_')[0]), 'marker': marker, 'ms': ms, 'alpha': 1.,
+        #         # 'xmin': 400, 'xmax': 850,
+        #         'ymin': 0., 'ymax': 0.32,
+        #         'xlabel': r"$\tilde{\Lambda}$", 'ylabel': r'$M_{\rm{disk}}$ $[M_{\odot}]$',
+        #         'label': lbl, 'yscale': None, 'title': {},
+        #         'fancyticks': True, 'minorticks': True,
+        #         'fontsize': fontsize,
+        #         'labelsize': labelsize,
+        #         # 'legend': {'loc': 'upper right', 'ncol': 2, 'fontsize': 12}
+        #     }
+        #     o_plot.set_plot_dics.append(dic_ye_prof)
+
+
+        # print('')
+        # break
+
+    o_plot.main()
+    exit(1)
+# plot_ejecta_properites_bern()
+
+# plot disk masses
+
+def plot_disk_masses():
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = Paths.plots + "all/"
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["figsize"] = (4.2, 3.6)  # <->, |]
+    o_plot.gen_set["figname"] = "disk_masses.png"
+    o_plot.gen_set["sharex"] = True
+    o_plot.gen_set["sharey"] = False
+    o_plot.gen_set["subplots_adjust_h"] = 0.0
+    o_plot.gen_set["subplots_adjust_w"] = 0.0
+    o_plot.set_plot_dics = []
+
+    # label1 = "Dyn"
+    # label2 = "Wind"
+    label1v = "Dyn."
+    label2v = "Wind"
+    fontsize = 12
+    labelsize = 12
+
+    lams, mejs, eoss = [], [], []
+    for sim in list_sims_all:
+        print(sim),
+        self_prop = LOAD_INIT_DATA(sim)
+        lam = self_prop.get_par("Lambda")
+        lams.append(lam)
+        print("lam:{}".format(lam)),
+
+        d1class = ADD_METHODS_1D(sim)
+        mej = d1class.get_par("Mej_tot", criterion="_0_b_w")
+        mejs.append(mej)
+        print("mej:{}".format(mej)),
+
+        print('')
+
+        if sim.__contains__("LK"):
+            marker = "d"
+        else:
+            marker = "x"
+
+        if sim.split('_')[0] in eoss:
+            lbl = None
+        else:
+            eoss.append(sim.split('_')[0])
+            lbl = sim.split('_')[0]
+
+        ms = get_ms(float(self_prop.get_par("q")))
+
+
+        # =========================================== DiskMass3D
+        mdisk = d1class.get_par("Mdisk3D")
+        if not np.isnan(mdisk):
+            dic_ye_prof = {
+                'task': 'marker', 'ptype': 'cartesian',
+                'position': (4, 1),
+                'x': np.array(lam, dtype=float), 'y': np.array(mdisk, dtype=float),
+                'v_n_x': 'Lambda', 'v_n_y': None,
+                'color': eos_color(sim.split('_')[0]), 'marker': marker, 'ms': ms, 'alpha': 1.,
+                # 'xmin': 400, 'xmax': 850,
+                'ymin': 0., 'ymax': 0.32,
+                'xlabel': r"$\tilde{\Lambda}$", 'ylabel': r'$M_{\rm{disk}}$ $[M_{\odot}]$',
+                'label': lbl, 'yscale': None, 'title': {},
+                'fancyticks': True, 'minorticks': True,
+                'fontsize': fontsize,
+                'labelsize': labelsize,
+                # 'legend': {'loc': 'upper right', 'ncol': 2, 'fontsize': 12}
+            }
+            o_plot.set_plot_dics.append(dic_ye_prof)
+
+
+        # print('')
+        # break
+
+    o_plot.main()
+    exit(1)
+# plot_ejecta_properites_bern()
+
+"""=================================================| 2D slices |===================================================="""
+
+def get_xmin_xmax_ymin_ymax_zmin_zmax(rl):
+    if rl == 6:
+        xmin, xmax = -14, 14
+        ymin, ymax = -14, 14
+        zmin, zmax = 0, 14
+    elif rl == 5:
+        xmin, xmax = -28, 28
+        ymin, ymax = -28, 28
+        zmin, zmax = 0, 28
+    elif rl == 4:
+        xmin, xmax = -48, 48
+        ymin, ymax = -48, +48
+        zmin, zmax = 0, 48
+    elif rl == 3:
+        xmin, xmax = -88, 88
+        ymin, ymax = -88, 88
+        zmin, zmax = 0, 88
+    elif rl == 2:
+        xmin, xmax = -178, 178
+        ymin, ymax = -178, +178
+        zmin, zmax = 0, 178
+    elif rl == 1:
+        xmin, xmax = -354, 354
+        ymin, ymax = -354, +354
+        zmin, zmax = 0, 354
+    elif rl == 0:
+        xmin, xmax = -1044, 1044
+        ymin, ymax = -1044, 1044
+        zmin, zmax = 0, 1044
+    else:
+        # pass
+        raise IOError("Set limits for rl:{}".format(rl))
+
+    return xmin, xmax, ymin, ymax, zmin, zmax
+
+def plot_den_unb__vel_z():
+
+    # tmp = d3class.get_data(688128, 3, "xy", "ang_mom_flux")
+    # print(tmp.min(), tmp.max())
+    # print(tmp)
+    # exit(1) # dens_unb_geo
+
+    """ --- --- --- """
+
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = Paths.plots + 'all/'
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["figsize"] = (16.8, 8.0)  # <->, |] # to match hists with (8.5, 2.7)
+    o_plot.gen_set["figname"] = "DD2_ls220_slices.png"#"DD2_1512_slices.png" # LS_1412_slices
+    o_plot.gen_set["sharex"] = False
+    o_plot.gen_set["sharey"] = True
+    o_plot.gen_set["dpi"] = 128
+    o_plot.gen_set["subplots_adjust_h"] = -0.35
+    o_plot.gen_set["subplots_adjust_w"] = 0.1
+    o_plot.set_plot_dics = []
+
+    ''' -----------------------------------------| DD2_M15091235_M0_LK_SR |----------------------------------------- '''
+
+    # sim = "LS220_M14691268_M0_LK_SR" # "DD2_M15091235_M0_LK_SR"
+    sim = "DD2_M15091235_M0_LK_SR"
+    d3class = LOAD_PROFILE_XYXZ(sim)
+    d1class = ADD_METHODS_1D(sim)
+    rl = 3
+    it = 1490944
+
+    t = d3class.get_time_for_it(it, d1d2d3prof="prof")
+    tmerg = d1class.get_par("tmerger_gw")
+    xmin, xmax, ymin, ymax, zmin, zmax = get_xmin_xmax_ymin_ymax_zmin_zmax(rl)
+
+
+    # --------------------------------------------
+    mask = "x>0"
+
+    v_n = "rho"
+
+    rho_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                  'position': (1, 1),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-8, 'vmax': 1e-4,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                  'fancyticks': True,
+                  'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg)*1e3), 'fontsize': 14},
+                  'sharex': True,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+    rho_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                  'position': (2, 1),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-8, 'vmax': 1e-4,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                  'fancyticks': True,
+                  'title': {},
+                  'sharex': False,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+
+    o_plot.set_plot_dics.append(rho_dic_xz)
+    o_plot.set_plot_dics.append(rho_dic_xy)
+
+    v_n = "dens_unb_bern"
+
+    dunb_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                  'position': (1, 1),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-10, 'vmax': 1e-7,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                  'fancyticks': True,
+                  'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                  'sharex': True,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+    dunb_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                  'position': (2, 1),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-10, 'vmax': 1e-7,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                  'fancyticks': True,
+                  'title': {},
+                  'sharex': False,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+
+    o_plot.set_plot_dics.append(dunb_dic_xz)
+    o_plot.set_plot_dics.append(dunb_dic_xy)
+
+    # ---------------------------------------------
+    mask = "x<0"
+
+    v_n = "Ye"
+
+    ye_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                  'position': (1, 1),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 0.05, 'vmax': 0.40,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'RdBu', 'norm': None,
+                  'fancyticks': True,
+                  'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg)*1e3), 'fontsize': 14},
+                  'sharex': True,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+    ye_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                  'position': (2, 1),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar':{},
+                  # 'cbar': {'location': 'right .06 .05', 'label': r'$Y_e$',  # 'fmt': '%.1e',
+                  #          'labelsize': 14,
+                  #          'fontsize': 14},
+                  'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 0.05, 'vmax': 0.40,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'RdBu', 'norm': None,
+                  'fancyticks': True,
+                  'title': {},
+                  'sharex': False,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+
+    o_plot.set_plot_dics.append(ye_dic_xz)
+    o_plot.set_plot_dics.append(ye_dic_xy)
+
+
+
+    ''' -----------------------------------------| LS220_M14691268_M0_LK_SR |----------------------------------------- '''
+
+    # sim = "LS220_M14691268_M0_LK_SR" # "DD2_M15091235_M0_LK_SR"
+    sim = "LS220_M14691268_M0_LK_SR"
+    d3class = LOAD_PROFILE_XYXZ(sim)
+    d1class = ADD_METHODS_1D(sim)
+    rl = 3
+    it = 1490944
+
+    t = d3class.get_time_for_it(it, d1d2d3prof="prof")
+    tmerg = d1class.get_par("tmerger_gw")
+    xmin, xmax, ymin, ymax, zmin, zmax = get_xmin_xmax_ymin_ymax_zmin_zmax(rl)
+
+    # --------------------------------------------
+    mask = "x>0"
+
+    v_n = "rho"
+
+    rho_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                  'position': (1, 2),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-8, 'vmax': 1e-4,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                  'fancyticks': True,
+                  'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                  'sharex': True,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+    rho_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                  'position': (2, 2),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-8, 'vmax': 1e-4,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                  'fancyticks': True,
+                  'title': {},
+                  'sharex': False,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14,
+                  }
+
+    o_plot.set_plot_dics.append(rho_dic_xz)
+    o_plot.set_plot_dics.append(rho_dic_xy)
+
+    v_n = "dens_unb_bern"
+
+    dunb_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                   'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                   'position': (1, 2),  # 'title': '[{:.1f} ms]'.format(time_),
+                   'cbar': {},
+                   'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                   'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-10, 'vmax': 1e-7,
+                   'fill_vmin': False,  # fills the x < vmin with vmin
+                   'xscale': None, 'yscale': None,
+                   'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                   'fancyticks': True,
+                   'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                   'sharex': True,  # removes angular citkscitks
+                   'fontsize': 14,
+                   'labelsize': 14
+                   }
+    dunb_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                   'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                   'position': (2, 2),  # 'title': '[{:.1f} ms]'.format(time_),
+                   'cbar': {},
+                   'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                   'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-10, 'vmax': 1e-7,
+                   'fill_vmin': False,  # fills the x < vmin with vmin
+                   'xscale': None, 'yscale': None,
+                   'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                   'fancyticks': True,
+                   'title': {},
+                   'sharex': False,  # removes angular citkscitks
+                   'fontsize': 14,
+                   'labelsize': 14
+                   }
+
+    o_plot.set_plot_dics.append(dunb_dic_xz)
+    o_plot.set_plot_dics.append(dunb_dic_xy)
+
+    # ---------------------------------------------
+    mask = "x<0"
+
+    v_n = "Ye"
+
+    ye_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                 'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                 'position': (1, 2),  # 'title': '[{:.1f} ms]'.format(time_),
+                 'cbar': {},
+                 'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                 'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 0.05, 'vmax': 0.40,
+                 'fill_vmin': False,  # fills the x < vmin with vmin
+                 'xscale': None, 'yscale': None,
+                 'mask': mask, 'cmap': 'RdBu', 'norm': None,
+                 'fancyticks': True,
+                 'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                 'sharex': True,  # removes angular citkscitks
+                 'sharey': True,
+                 'fontsize': 14,
+                 'labelsize': 14
+                 }
+    ye_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                 'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                 'position': (2, 2),  # 'title': '[{:.1f} ms]'.format(time_),
+                 'cbar': {},
+                 # 'cbar': {'location': 'right .06 .05', 'label': r'$Y_e$',  # 'fmt': '%.1e',
+                 #          'labelsize': 14,
+                 #          'fontsize': 14},
+                 'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                 'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 0.05, 'vmax': 0.40,
+                 'fill_vmin': False,  # fills the x < vmin with vmin
+                 'xscale': None, 'yscale': None,
+                 'mask': mask, 'cmap': 'RdBu', 'norm': None,
+                 'fancyticks': True,
+                 'title': {},
+                 'sharex': False,  # removes angular citkscitks
+                 'sharey': True,
+                 'fontsize': 14,
+                 'labelsize': 14
+                 }
+
+    o_plot.set_plot_dics.append(ye_dic_xz)
+    o_plot.set_plot_dics.append(ye_dic_xy)
+
+
+    ''' -----------------------------------------| LS220_M13641364_M0_LK_SR |----------------------------------------- '''
+
+    # sim = "LS220_M14691268_M0_LK_SR" # "DD2_M15091235_M0_LK_SR"
+    sim = "LS220_M13641364_M0_LK_SR_restart"
+    d3class = LOAD_PROFILE_XYXZ(sim)
+    d1class = ADD_METHODS_1D(sim)
+    rl = 3
+    it = 696320
+
+    t = d3class.get_time_for_it(it, d1d2d3prof="prof")
+    tmerg = d1class.get_par("tmerger_gw")
+    xmin, xmax, ymin, ymax, zmin, zmax = get_xmin_xmax_ymin_ymax_zmin_zmax(rl)
+
+    # --------------------------------------------
+    mask = "x>0"
+
+    v_n = "rho"
+
+    rho_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                  'position': (1, 3),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-8, 'vmax': 1e-4,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                  'fancyticks': True,
+                  'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                  'sharex': True,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+    rho_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                  'position': (2, 3),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-8, 'vmax': 1e-4,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                  'fancyticks': True,
+                  'title': {},
+                  'sharex': False,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+
+    o_plot.set_plot_dics.append(rho_dic_xz)
+    o_plot.set_plot_dics.append(rho_dic_xy)
+
+    v_n = "dens_unb_bern"
+
+    dunb_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                   'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                   'position': (1, 3),  # 'title': '[{:.1f} ms]'.format(time_),
+                   'cbar': {},
+                   'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                   'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-10, 'vmax': 1e-7,
+                   'fill_vmin': False,  # fills the x < vmin with vmin
+                   'xscale': None, 'yscale': None,
+                   'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                   'fancyticks': True,
+                   'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                   'sharex': True,  # removes angular citkscitks
+                   'fontsize': 14,
+                   'labelsize': 14
+                   }
+    dunb_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                   'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                   'position': (2, 3),  # 'title': '[{:.1f} ms]'.format(time_),
+                   'cbar': {'location': 'bottom -.05 .00', 'label': r'$D_{\rm{unb}}$',  # 'fmt': '%.1e',
+                            'labelsize': 14,
+                            'fontsize': 14},
+                   'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                   'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-10, 'vmax': 1e-7,
+                   'fill_vmin': False,  # fills the x < vmin with vmin
+                   'xscale': None, 'yscale': None,
+                   'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                   'fancyticks': True,
+                   'title': {},
+                   'sharex': False,  # removes angular citkscitks
+                   'fontsize': 14,
+                   'labelsize': 14
+                   }
+
+    o_plot.set_plot_dics.append(dunb_dic_xz)
+    o_plot.set_plot_dics.append(dunb_dic_xy)
+
+    # ---------------------------------------------
+    mask = "x<0"
+
+    v_n = "Ye"
+
+    ye_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                 'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                 'position': (1, 3),  # 'title': '[{:.1f} ms]'.format(time_),
+                 'cbar': {},
+                 'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                 'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 0.05, 'vmax': 0.40,
+                 'fill_vmin': False,  # fills the x < vmin with vmin
+                 'xscale': None, 'yscale': None,
+                 'mask': mask, 'cmap': 'RdBu', 'norm': None,
+                 'fancyticks': True,
+                 'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                 'sharex': True,  # removes angular citkscitks
+                 'sharey': True,
+                 'fontsize': 14,
+                 'labelsize': 14
+                 }
+    ye_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                 'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                 'position': (2, 3),  # 'title': '[{:.1f} ms]'.format(time_),
+                 'cbar': {},
+                 # 'cbar': {'location': 'right .06 .05', 'label': r'$Y_e$',  # 'fmt': '%.1e',
+                 #          'labelsize': 14,
+                 #          'fontsize': 14},
+                 'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                 'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 0.05, 'vmax': 0.40,
+                 'fill_vmin': False,  # fills the x < vmin with vmin
+                 'xscale': None, 'yscale': None,
+                 'mask': mask, 'cmap': 'RdBu', 'norm': None,
+                 'fancyticks': True,
+                 'title': {},
+                 'sharex': False,  # removes angular citkscitk
+                 'sharey': True,
+                 'fontsize': 14,
+                 'labelsize': 14
+                 }
+
+    o_plot.set_plot_dics.append(ye_dic_xz)
+    o_plot.set_plot_dics.append(ye_dic_xy)
+
+    ''' -----------------------------------------| DD2_M13641364_M0_LK_SR |----------------------------------------- '''
+
+    # sim = "LS220_M14691268_M0_LK_SR" # "DD2_M15091235_M0_LK_SR"
+    sim = "DD2_M13641364_M0_LK_SR_R04"
+    d3class = LOAD_PROFILE_XYXZ(sim)
+    d1class = ADD_METHODS_1D(sim)
+    rl = 3
+    it = 1581030
+
+    t = d3class.get_time_for_it(it, d1d2d3prof="prof")
+    tmerg = d1class.get_par("tmerger_gw")
+    xmin, xmax, ymin, ymax, zmin, zmax = get_xmin_xmax_ymin_ymax_zmin_zmax(rl)
+
+    # --------------------------------------------
+    mask = "x>0"
+
+    v_n = "rho"
+
+    rho_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                  'position': (1, 4),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-8, 'vmax': 1e-4,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                  'fancyticks': True,
+                  'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                  'sharex': True,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+    rho_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                  'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                  'position': (2, 4),  # 'title': '[{:.1f} ms]'.format(time_),
+                  'cbar': {},
+                  'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                  'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-8, 'vmax': 1e-4,
+                  'fill_vmin': False,  # fills the x < vmin with vmin
+                  'xscale': None, 'yscale': None,
+                  'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                  'fancyticks': True,
+                  'title': {},
+                  'sharex': False,  # removes angular citkscitks
+                  'fontsize': 14,
+                  'labelsize': 14
+                  }
+
+    o_plot.set_plot_dics.append(rho_dic_xz)
+    o_plot.set_plot_dics.append(rho_dic_xy)
+
+    v_n = "dens_unb_bern"
+
+    dunb_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                   'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                   'position': (1, 4),  # 'title': '[{:.1f} ms]'.format(time_),
+                   'cbar': {},
+                   'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                   'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-10, 'vmax': 1e-7,
+                   'fill_vmin': False,  # fills the x < vmin with vmin
+                   'xscale': None, 'yscale': None,
+                   'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                   'fancyticks': True,
+                   'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                   'sharex': True,  # removes angular citkscitks
+                   'fontsize': 14,
+                   'labelsize': 14
+                   }
+    dunb_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                   'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                   'position': (2, 4),  # 'title': '[{:.1f} ms]'.format(time_),
+                   'cbar': {},
+                   'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                   'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-10, 'vmax': 1e-7,
+                   'fill_vmin': False,  # fills the x < vmin with vmin
+                   'xscale': None, 'yscale': None,
+                   'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                   'fancyticks': True,
+                   'title': {},
+                   'sharex': False,  # removes angular citkscitks
+                   'fontsize': 14,
+                   'labelsize': 14
+                   }
+
+    o_plot.set_plot_dics.append(dunb_dic_xz)
+    o_plot.set_plot_dics.append(dunb_dic_xy)
+
+    # ---------------------------------------------
+    mask = "x<0"
+
+    v_n = "Ye"
+
+    ye_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                 'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                 'position': (1, 4),  # 'title': '[{:.1f} ms]'.format(time_),
+                 'cbar': {},
+                 'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                 'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 0.05, 'vmax': 0.40,
+                 'fill_vmin': False,  # fills the x < vmin with vmin
+                 'xscale': None, 'yscale': None,
+                 'mask': mask, 'cmap': 'RdBu', 'norm': None,
+                 'fancyticks': True,
+                 'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                 'sharex': True,  # removes angular citkscitks
+                 'sharey': True,
+                 'fontsize': 14,
+                 'labelsize': 14
+                 }
+    ye_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                 'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                 'position': (2, 4),  # 'title': '[{:.1f} ms]'.format(time_),
+                 # 'cbar': {},
+                 'cbar': {'location': 'bottom -.05 .00', 'label': r'$Y_e$',  # 'fmt': '%.1e',
+                          'labelsize': 14,
+                          'fontsize': 14},
+                 'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                 'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 0.05, 'vmax': 0.40,
+                 'fill_vmin': False,  # fills the x < vmin with vmin
+                 'xscale': None, 'yscale': None,
+                 'mask': mask, 'cmap': 'RdBu', 'norm': None,
+                 'fancyticks': True,
+                 'title': {},
+                 'sharex': False,  # removes angular citkscitks
+                 'sharey': True,
+                 'fontsize': 14,
+                 'labelsize': 14
+                 }
+
+    o_plot.set_plot_dics.append(ye_dic_xz)
+    o_plot.set_plot_dics.append(ye_dic_xy)
+
+
+    # o_plot.set_plot_dics.append(def_dic_xz)
+    # o_plot.set_plot_dics.append(def_dic_xy)
+
+    o_plot.main()
+
+    exit(0)
+# plot_den_unb__vel_z()
+
+
+def plot_den_unb__vel_z2():
+
+    # tmp = d3class.get_data(688128, 3, "xy", "ang_mom_flux")
+    # print(tmp.min(), tmp.max())
+    # print(tmp)
+    # exit(1) # dens_unb_geo
+
+    """ --- --- --- """
+
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = Paths.plots + 'all/'
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["figsize"] = (16.8, 8.0)  # <->, |] # to match hists with (8.5, 2.7)
+    o_plot.gen_set["figname"] = "DD2_ls220_slices.png"#"DD2_1512_slices.png" # LS_1412_slices
+    o_plot.gen_set["sharex"] = False
+    o_plot.gen_set["sharey"] = True
+    o_plot.gen_set["dpi"] = 128
+    o_plot.gen_set["subplots_adjust_h"] = -0.35
+    o_plot.gen_set["subplots_adjust_w"] = 0.05
+    o_plot.set_plot_dics = []
+
+    ''' -----------------------------------------------| SETTINGS |--------------------------------------------------'''
+
+    sims = ["DD2_M15091235_M0_LK_SR", "DD2_M13641364_M0_LK_SR_R04", "LS220_M14691268_M0_LK_SR", "LS220_M13641364_M0_LK_SR_restart"]
+    iterations = [1490944, 1581030, 1490944, 696320]
+    rls = [3, 3, 3, 3]
+
+
+
+    ''' ------------------------------------------------------------------------------------------------------------ '''
+    n = 1
+    for sim, it, rl in zip(sims, iterations, rls):
+        d3class = LOAD_PROFILE_XYXZ(sim)
+        d1class = ADD_METHODS_1D(sim)
+        t = d3class.get_time_for_it(it, d1d2d3prof="prof")
+        tmerg = d1class.get_par("tmerger_gw")
+        xmin, xmax, ymin, ymax, zmin, zmax = get_xmin_xmax_ymin_ymax_zmin_zmax(rl)
+
+        # ------------------ left side -----------------
+        mask = "x>0"
+
+        v_n = "rho"
+
+        rho_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                      'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                      'position': (1, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                      'cbar': {},
+                      'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                      'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-8, 'vmax': 1e-4,
+                      'fill_vmin': False,  # fills the x < vmin with vmin
+                      'xscale': None, 'yscale': None,
+                      'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                      'fancyticks': True,
+                      'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                      'sharex': True,  # removes angular citkscitks
+                      'sharey': False,
+                      'fontsize': 14,
+                      'labelsize': 14
+                      }
+        rho_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                      'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                      'position': (2, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                      'cbar': {},
+                      'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                      'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-8, 'vmax': 1e-4,
+                      'fill_vmin': False,  # fills the x < vmin with vmin
+                      'xscale': None, 'yscale': None,
+                      'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                      'fancyticks': True,
+                      'title': {},
+                      'sharex': False,  # removes angular citkscitks
+                      'sharey': False,
+                      'fontsize': 14,
+                      'labelsize': 14
+                      }
+        o_plot.set_plot_dics.append(rho_dic_xz)
+        o_plot.set_plot_dics.append(rho_dic_xy)
+
+        v_n = "dens_unb_bern"
+
+        dunb_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                       'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                       'position': (1, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                       'cbar': {},
+                       'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                       'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-10, 'vmax': 1e-7,
+                       'fill_vmin': False,  # fills the x < vmin with vmin
+                       'xscale': None, 'yscale': None,
+                       'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                       'fancyticks': True,
+                       'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                       'sharex': True,  # removes angular citkscitks
+                       'sharey': False,
+                       'fontsize': 14,
+                       'labelsize': 14
+                       }
+        dunb_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                       'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                       'position': (2, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                       'cbar': {},
+                       'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                       'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-10, 'vmax': 1e-7,
+                       'fill_vmin': False,  # fills the x < vmin with vmin
+                       'xscale': None, 'yscale': None,
+                       'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                       'fancyticks': True,
+                       'title': {},
+                       'sharex': False,  # removes angular citkscitks
+                       'sharey': False,
+                       'fontsize': 14,
+                       'labelsize': 14
+                       }
+
+        o_plot.set_plot_dics.append(dunb_dic_xz)
+        o_plot.set_plot_dics.append(dunb_dic_xy)
+
+        # ------------------- right side -------------
+        mask = "x<0"
+
+        v_n = "Ye"
+
+        ye_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                     'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                     'position': (1, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                     'cbar': {},
+                     'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                     'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 0.1, 'vmax': 0.5,
+                     'fill_vmin': False,  # fills the x < vmin with vmin
+                     'xscale': None, 'yscale': None,
+                     'mask': mask, 'cmap': 'Reds_r', 'norm': None,
+                     'fancyticks': True,
+                     'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                     'sharex': True,  # removes angular citkscitks
+                     'sharey': False,
+                     'fontsize': 14,
+                     'labelsize': 14
+                     }
+        ye_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                     'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                     'position': (2, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                     'cbar': {},
+                     # 'cbar': {'location': 'right .06 .05', 'label': r'$Y_e$',  # 'fmt': '%.1e',
+                     #          'labelsize': 14,
+                     #          'fontsize': 14},
+                     'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                     'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 0.1, 'vmax': 0.5,
+                     'fill_vmin': False,  # fills the x < vmin with vmin
+                     'xscale': None, 'yscale': None,
+                     'mask': mask, 'cmap': 'Reds_r', 'norm': None,
+                     'fancyticks': True,
+                     'title': {},
+                     'sharex': False,  # removes angular citkscitks
+                     'sharey': False,
+                     'fontsize': 14,
+                     'labelsize': 14
+                     }
+
+        o_plot.set_plot_dics.append(ye_dic_xz)
+        o_plot.set_plot_dics.append(ye_dic_xy)
+
+        # --------------------------------------------------
+        if n > 1:
+            rho_dic_xz['sharey'] = True
+            rho_dic_xy['sharey'] = True
+            dunb_dic_xz['sharey'] = True
+            dunb_dic_xy['sharey'] = True
+            ye_dic_xz['sharey'] = True
+            ye_dic_xy['sharey'] = True
+
+        if n == 1:
+            rho_dic_xy['cbar'] = \
+                {'location': 'bottom -.05 .00', 'label': r'$\rho$ [geo]',  # 'fmt': '%.1e',
+                 'labelsize': 14, 'fontsize': 14}
+
+        if n ==2:
+            dunb_dic_xy['cbar'] = \
+                {'location': 'bottom -.05 .00', 'label': r'$D_{\rm{unb}}$ [geo]',  # 'fmt': '%.1e',
+                 'labelsize': 14, 'fontsize': 14}
+
+        if n ==3:
+            ye_dic_xy['cbar'] = \
+                {'location': 'bottom -.05 .00', 'label': r'$Y_e$ [geo]',  'fmt': '%.1f',
+                 'labelsize': 14, 'fontsize': 14}
+
+        n = n + 1
+
+    ''' ------------------------------------------------------------------------------------------------------------ '''
+    o_plot.main()
+
+    exit(0)
+# plot_den_unb__vel_z2()
+
+def plot_den_unb__vel_z__ls220_LK_MO():
+
+    # tmp = d3class.get_data(688128, 3, "xy", "ang_mom_flux")
+    # print(tmp.min(), tmp.max())
+    # print(tmp)
+    # exit(1) # dens_unb_geo
+
+    """ --- --- --- """
+
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = Paths.plots + 'all/'
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["figsize"] = (8.4, 8.0)  # <->, |] # to match hists with (8.5, 2.7)
+    o_plot.gen_set["figname"] = "ls220_lk_m0.png"#"DD2_1512_slices.png" # LS_1412_slices
+    o_plot.gen_set["sharex"] = False
+    o_plot.gen_set["sharey"] = True
+    o_plot.gen_set["dpi"] = 128
+    o_plot.gen_set["subplots_adjust_h"] = -0.35
+    o_plot.gen_set["subplots_adjust_w"] = 0.05
+    o_plot.set_plot_dics = []
+
+    ''' -----------------------------------------------| SETTINGS |--------------------------------------------------'''
+
+
+    sims = ["LS220_M140120_LK", "LS220_M140120_M0"]
+    iterations = [692398, 720294]
+    rls = [2, 2]
+
+
+
+    ''' ------------------------------------------------------------------------------------------------------------ '''
+    n = 1
+    for sim, it, rl in zip(sims, iterations, rls):
+        d3class = LOAD_PROFILE_XYXZ(sim)
+        d1class = ADD_METHODS_1D(sim)
+        t = d3class.get_time_for_it(it, d1d2d3prof="prof")
+        tmerg = 0#d1class.get_par("tmerger_gw")
+        xmin, xmax, ymin, ymax, zmin, zmax = get_xmin_xmax_ymin_ymax_zmin_zmax(rl)
+
+        # ------------------ left side -----------------
+        mask = "x>0"
+
+        v_n = "rho"
+
+        rho_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                      'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                      'position': (1, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                      'cbar': {},
+                      'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                      'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-8, 'vmax': 1e-4,
+                      'fill_vmin': False,  # fills the x < vmin with vmin
+                      'xscale': None, 'yscale': None,
+                      'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                      'fancyticks': True,
+                      'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                      'sharex': True,  # removes angular citkscitks
+                      'sharey': False,
+                      'fontsize': 14,
+                      'labelsize': 14
+                      }
+        rho_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                      'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                      'position': (2, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                      'cbar': {},
+                      'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                      'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-8, 'vmax': 1e-4,
+                      'fill_vmin': False,  # fills the x < vmin with vmin
+                      'xscale': None, 'yscale': None,
+                      'mask': mask, 'cmap': 'viridis', 'norm': "log",
+                      'fancyticks': True,
+                      'title': {},
+                      'sharex': False,  # removes angular citkscitks
+                      'sharey': False,
+                      'fontsize': 14,
+                      'labelsize': 14
+                      }
+        # o_plot.set_plot_dics.append(rho_dic_xz)
+        # o_plot.set_plot_dics.append(rho_dic_xy)
+
+        v_n = "dens_unb_bern"
+
+        dunb_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                       'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                       'position': (1, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                       'cbar': {},
+                       'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                       'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 1e-10, 'vmax': 1e-7,
+                       'fill_vmin': False,  # fills the x < vmin with vmin
+                       'xscale': None, 'yscale': None,
+                       'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                       'fancyticks': True,
+                       'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                       'sharex': True,  # removes angular citkscitks
+                       'sharey': False,
+                       'fontsize': 14,
+                       'labelsize': 14
+                       }
+        dunb_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                       'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                       'position': (2, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                       'cbar': {},
+                       'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                       'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 1e-10, 'vmax': 1e-7,
+                       'fill_vmin': False,  # fills the x < vmin with vmin
+                       'xscale': None, 'yscale': None,
+                       'mask': mask, 'cmap': 'Blues', 'norm': "log",
+                       'fancyticks': True,
+                       'title': {},
+                       'sharex': False,  # removes angular citkscitks
+                       'sharey': False,
+                       'fontsize': 14,
+                       'labelsize': 14
+                       }
+
+        o_plot.set_plot_dics.append(dunb_dic_xz)
+        o_plot.set_plot_dics.append(dunb_dic_xy)
+
+        # ------------------- right side -------------
+        mask = "x<0"
+
+        v_n = "Ye"
+
+        ye_dic_xz = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                     'data': d3class, 'it': it, 'plane': 'xz', 'rl': rl,
+                     'position': (1, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                     'cbar': {},
+                     'v_n_x': 'x', 'v_n_y': 'z', 'v_n': v_n,
+                     'xmin': xmin, 'xmax': xmax, 'ymin': zmin, 'ymax': zmax, 'vmin': 0.1, 'vmax': 0.5,
+                     'fill_vmin': False,  # fills the x < vmin with vmin
+                     'xscale': None, 'yscale': None,
+                     'mask': mask, 'cmap': 'Reds_r', 'norm': None,
+                     'fancyticks': True,
+                     'title': {"text": r'$t-t_{merg}:$' + r'${:.1f}$ [ms]'.format((t - tmerg) * 1e3), 'fontsize': 14},
+                     'sharex': True,  # removes angular citkscitks
+                     'sharey': False,
+                     'fontsize': 14,
+                     'labelsize': 14
+                     }
+        ye_dic_xy = {'task': 'slice', 'dtype': '3d rl', 'ptype': 'cartesian', 'aspect': 1.,
+                     'data': d3class, 'it': it, 'plane': 'xy', 'rl': rl,
+                     'position': (2, n),  # 'title': '[{:.1f} ms]'.format(time_),
+                     'cbar': {},
+                     # 'cbar': {'location': 'right .06 .05', 'label': r'$Y_e$',  # 'fmt': '%.1e',
+                     #          'labelsize': 14,
+                     #          'fontsize': 14},
+                     'v_n_x': 'x', 'v_n_y': 'y', 'v_n': v_n,
+                     'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax, 'vmin': 0.1, 'vmax': 0.5,
+                     'fill_vmin': False,  # fills the x < vmin with vmin
+                     'xscale': None, 'yscale': None,
+                     'mask': mask, 'cmap': 'Reds_r', 'norm': None,
+                     'fancyticks': True,
+                     'title': {},
+                     'sharex': False,  # removes angular citkscitks
+                     'sharey': False,
+                     'fontsize': 14,
+                     'labelsize': 14
+                     }
+
+        o_plot.set_plot_dics.append(ye_dic_xz)
+        o_plot.set_plot_dics.append(ye_dic_xy)
+
+        # --------------------------------------------------
+        if n > 1:
+            rho_dic_xz['sharey'] = True
+            rho_dic_xy['sharey'] = True
+            dunb_dic_xz['sharey'] = True
+            dunb_dic_xy['sharey'] = True
+            ye_dic_xz['sharey'] = True
+            ye_dic_xy['sharey'] = True
+
+        # if n == 1:
+        #     rho_dic_xy['cbar'] = \
+        #         {'location': 'bottom -.05 .00', 'label': r'$\rho$ [geo]',  # 'fmt': '%.1e',
+        #          'labelsize': 14, 'fontsize': 14}
+
+        if n == 2:
+            dunb_dic_xy['cbar'] = \
+                {'location': 'bottom -.05 .00', 'label': r'$D_{\rm{unb}}$ [geo]',  # 'fmt': '%.1e',
+                 'labelsize': 14, 'fontsize': 14}
+
+        if n == 2:
+            ye_dic_xy['cbar'] = \
+                {'location': 'right .03 .00', 'label': r'$Y_e$ [geo]',  'fmt': '%.1f',
+                 'labelsize': 14, 'fontsize': 14}
+
+        n = n + 1
+
+    ''' ------------------------------------------------------------------------------------------------------------ '''
+    o_plot.main()
+
+    exit(0)
+# plot_den_unb__vel_z__ls220_LK_MO()
+
+def plot_corr_ls220_LK_MO():
+
+    o_plot = PLOT_MANY_TASKS()
+    o_plot.gen_set["figdir"] = Paths.plots + '/all/'
+    o_plot.gen_set["type"] = "cartesian"
+    o_plot.gen_set["figsize"] = (8.0, 12.0)  # <->, |]
+    o_plot.gen_set["figname"] = "corr_ls22_LK_MO_test2.png"
+    o_plot.gen_set["sharex"] = False
+    o_plot.gen_set["sharey"] = False
+    o_plot.gen_set["dpi"] = 128
+    o_plot.gen_set["subplots_adjust_h"] = 0.3
+    o_plot.gen_set["subplots_adjust_w"] = 0.4
+    o_plot.set_plot_dics = []
+    ''' -----------------------------------------------| SETTINGS |--------------------------------------------------'''
+
+    sims = ["LS220_M140120_LK", "LS220_M140120_M0"]
+    iterations = [692398, 720294]
+
+    ''' ------------------------------------------------------------------------------------------------------------ '''
+
+    p = 0
+    for sim, it in zip(sims, iterations):
+        o_corr_data = LOAD_RES_CORR(sim)
+        p = p + 1
+
+        corr_dic = {  # relies on the "get_res_corr(self, it, v_n): " method of data object
+            'task': '2d colormesh', 'dtype': 'corr', 'ptype': 'cartesian',
+            'data': o_corr_data, 'it': it,
+            'position': (1, p),
+            'v_n_x': 'velz', 'v_n_y': 'Ye', 'v_n': 'mass',
+            'xlabel': r"$\upsilon_{z}$", 'ylabel': r"$Y_e$",
+            'cbar' : {},
+            'xmin': -0.25, 'xmax': 0.25, 'ymin': 0.05, 'ymax': 0.5, 'vmin': 1e-9, 'vmax': 1e-6,
+            'xscale': "linear", 'yscale': "linear",
+            # 'mask_below': None, 'mask_above': None,
+            'cmap': 'viridis_r',
+            'norm': 'log', #'todo': None,
+            # 'title': o_corr_data.sim.replace('_', '\_'),
+            'title': {"text": o_corr_data.sim.replace('_', '\_'), 'fontsize': 14},
+            'fancyticks': True,
+            'minorticks': True,
+            # 'sharex': False,  # removes angular citkscitks
+            # 'sharey': False,
+            'fontsize': 14,
+            'labelsize': 14
+        }
+        # o_plot.set_plot_dics.append(corr_dic)
+
+        corr_dic = {  # relies on the "get_res_corr(self, it, v_n): " method of data object
+            'task': '2d colormesh', 'dtype': 'corr', 'ptype': 'cartesian',
+            'data': o_corr_data, 'it': it,
+            'position': (2, p),
+            'v_n_x': 'velz', 'v_n_y': 'theta', 'v_n': 'mass',
+            'xlabel': r"$\upsilon_{z}$", 'ylabel': r"$\theta$",
+            'cbar' : {},
+            'xmin': -0.25, 'xmax': 0.25, 'ymin': 0.0, 'ymax': 90, 'vmin': 1e-9, 'vmax': 1e-6,
+            'xscale': "linear", 'yscale': "linear",
+            # 'mask_below': None, 'mask_above': None,
+            'cmap': 'viridis_r',
+            'norm': 'log', #'todo': None,
+            # 'title': o_corr_data.sim.replace('_', '\_'),
+            'title': {"text": o_corr_data.sim.replace('_', '\_'), 'fontsize': 14},
+            'fancyticks': True,
+            'minorticks': True,
+            # 'sharex': False,  # removes angular citkscitks
+            # 'sharey': False,
+            'fontsize': 14,
+            'labelsize': 14
+        }
+        # o_plot.set_plot_dics.append(corr_dic)
+
+        corr_dic2 = {  # relies on the "get_res_corr(self, it, v_n): " method of data object
+            'task': '2d colormesh', 'dtype': 'corr', 'ptype': 'cartesian',
+            'data': o_corr_data, 'it': it,
+            'position': (1, p),
+            'v_n_x': 'dens_unb_bern', 'v_n_y': 'Ye', 'v_n': 'mass',
+            'cbar': {},
+            'xlabel': r"$D_{\rm{unb}}$", 'ylabel': r"$Y_e$",
+            'xmin': 1e-8, 'xmax': 1e-6, 'ymin': 0.05, 'ymax': 0.5, 'vmin': 1e-9, 'vmax': 1e-6,
+            'xscale': "log", 'yscale': "linear",
+            # 'mask_below': None, 'mask_above': None,
+            'cmap': 'viridis_r',
+            'norm': 'log', #'todo': None,
+            # 'title': o_corr_data.sim.replace('_', '\_'),
+            'title': {"text": o_corr_data.sim.replace('_', '\_'), 'fontsize': 14}, # "text": o_corr_data.sim.replace('_', '\_'), 'fontsize': 14
+            'fancyticks': True,
+            'minorticks': True,
+            # 'sharex': False,  # removes angular citkscitks
+            # 'sharey': False,
+            'fontsize': 14,
+            'labelsize': 14
+        }
+        o_plot.set_plot_dics.append(corr_dic2)
+
+        corr_dic3 = {  # relies on the "get_res_corr(self, it, v_n): " method of data object
+            'task': '2d colormesh', 'dtype': 'corr', 'ptype': 'cartesian',
+            'data': o_corr_data, 'it': it,
+            'position': (2, p),
+            'v_n_x': 'dens_unb_bern', 'v_n_y': 'velz', 'v_n': 'mass',
+            'cbar': {},
+            'xlabel': r"$D_{\rm{unb}}$", 'ylabel': r"$\upsilon_{z}$",
+            'xmin': 1e-8, 'xmax': 1e-6, 'ymin': -0.25, 'ymax': 0.25, 'vmin': 1e-9, 'vmax': 1e-6,
+            'xscale': "log", 'yscale': "linear",
+            # 'mask_below': None, 'mask_above': None,
+            'cmap': 'viridis_r',
+            'norm': 'log', #'todo': None,
+            # 'title': o_corr_data.sim.replace('_', '\_'),
+            'title': {}, # "text": o_corr_data.sim.replace('_', '\_'), 'fontsize': 14
+            'fancyticks': True,
+            'minorticks': True,
+            # 'sharex': False,  # removes angular citkscitks
+            # 'sharey': False,
+            'fontsize': 14,
+            'labelsize': 14
+        }
+        o_plot.set_plot_dics.append(corr_dic3)
+
+        corr_dic3 = {  # relies on the "get_res_corr(self, it, v_n): " method of data object
+            'task': '2d colormesh', 'dtype': 'corr', 'ptype': 'cartesian',
+            'data': o_corr_data, 'it': it,
+            'position': (3, p),
+            'v_n_x': 'dens_unb_bern', 'v_n_y': 'theta', 'v_n': 'mass',
+            'cbar': {},
+            'xlabel': r"$D_{\rm{unb}}$", 'ylabel': r"$\theta$",
+            'xmin': 1e-8, 'xmax': 1e-6, 'ymin': 0, 'ymax': 90, 'vmin': 1e-9, 'vmax': 1e-6,
+            'xscale': "log", 'yscale': "linear",
+            # 'mask_below': None, 'mask_above': None,
+            'cmap': 'viridis_r',
+            'norm': 'log', #'todo': None,
+            # 'title': o_corr_data.sim.replace('_', '\_'),
+            'title': {}, # "text": o_corr_data.sim.replace('_', '\_'), 'fontsize': 14
+            'fancyticks': True,
+            'minorticks': True,
+            # 'sharex': False,  # removes angular citkscitks
+            # 'sharey': False,
+            'fontsize': 14,
+            'labelsize': 14
+        }
+        o_plot.set_plot_dics.append(corr_dic3)
+
+    o_plot.main()
+plot_corr_ls220_LK_MO()
